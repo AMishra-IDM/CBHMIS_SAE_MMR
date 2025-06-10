@@ -1,0 +1,211 @@
+---
+title: "Implementing the ICAR Model in Stan"
+format:
+  html:
+    css: theming/quarto_styles.css 
+    syntax-definitions:
+      - theming/stan.xml
+    embed-resources: true
+    toc: true
+    toc-location: left
+    grid:
+      body-width: 1000px
+---
+
+## Notebook Setup
+
+Import all libraries, load the NYC study data.
+
+```{r}
+library(sf)
+library(spdep) |> suppressPackageStartupMessages()
+library(ggplot2)
+library(tidyverse) |> suppressPackageStartupMessages()
+library(cmdstanr)
+library(posterior)
+library(bayesplot)
+library(loo)
+library(parallel)
+library(igraph)
+cores = floor(parallel::detectCores() / 2)
+
+
+# helper function:  create edgelist for ICAR component
+nbs_to_adjlist <- function(nb) {
+    adj_matrix = nb2mat(nb,style="B")
+    t(as_edgelist(graph_from_adjacency_matrix(adj_matrix, mode="undirected")))
+}
+```
+
+```{r}
+nyc_geodata = st_read("data/nyc_study.geojson")
+names(nyc_geodata)
+```
+
+## Disconnected Components (and islands)
+
+New York city consists of several islands; only the Bronx is part of the mainland; Brooklyn and Queens are part of Long Island, plus smaller islands City Island, Roosevelt Island, and the Rockaways.
+
+```{r}
+nyc_nbs = poly2nb(nyc_geodata, queen=FALSE)
+summary(nyc_nbs)
+```
+
+*This is a problem for the ICAR model, which operates on a fully connected graph (single component)*
+
+* For the NYC analysis paper, we hand edited the map of NYC (in R) to create a fully connected network graph.
+
+* For today's workshop, we will restrict out attention to Brooklyn, the largest borough in NYC, which is a single network component.
+
+```{r}
+brooklyn_geodata = nyc_geodata[nyc_geodata$BoroName=='Brooklyn', ]
+brooklyn_nbs = poly2nb(brooklyn_geodata, queen=FALSE)
+brooklyn_coords = st_coordinates(st_centroid(brooklyn_geodata['geometry']))
+plot(st_geometry(brooklyn_geodata), col='skyblue')
+plot(brooklyn_nbs, coords=brooklyn_coords, add=TRUE, pch=20, cex=0.6)
+```
+
+```{r}
+summary(brooklyn_nbs)
+```
+
+## Adding an ICAR Component to the Base Model
+
+The ICAR model uses the spatial structure of the data, abstracted into a neighborhood network.
+
+### Alternative encodings of neighborhood network
+
+- $N \times N$ Adjacency matrix
+  + Entries $(i,\ j)$ and $(j,\ i)$ are 1 when regions $n_i$ and $n_j$ are neighbors, 0 otherwise
+
+- Undirected graph: regions are vertices, pairs of neighbors are edges
+  + Encoded as *edges* - 2 column matrix, each row is a pair of neighbors $({n_i}, {n_j})$
+
+The Stan ICAR model uses the latter.
+
+### Stan ICAR Model Implementation
+
+$$ p(\phi) \propto \exp \left\{ {- \frac{1}{2}} \sum_{i \sim j}{({\phi}_i - {\phi}_j)}^2 \right\} $$
+
+Use Stan's vectorized operations to compute log probability density:
+
+```stan
+   target += -0.5 * dot_self(phi[node1] - phi[node2]);
+```
+
+Encode neighbor information as a graph.
+
+* Nodes are indexed from 1:N.
+* Edges indices are stored in a 2 x N array
+  + each column is an edge
+  + row 1: index of first node in edge pair, $n_i$
+  + row 2: index of second node in edge pair, $n_j$
+
+
+```
+  int<lower = 0> N;  // number of areal regions
+  // spatial structure
+  int<lower = 0> N_edges;  // number of neighbor pairs
+  array[2, N_edges] int<lower = 1, upper = N> neighbors;  // node[1, j] adjacent to node[2, j]
+```
+
+
+## ICAR Model:  `poisson_icar.stan`
+
+This file is in directory `stan/poisson_icar.stan`.
+
+```{r}
+poisson_icar_model_file = file.path('stan', 'poisson_icar.stan')
+cat(readLines(poisson_icar_model_file), sep="\n")
+```
+
+## Data Prep
+
+#### Get edgeset
+
+- Compute this automatically from `nyc_geodata` spatial geometry component
+  + Python package `libpysal`
+  + R package `spdep`
+
+```{r}
+brooklyn_nbs_adj = nbs_to_adjlist(brooklyn_nbs)
+brooklyn_nbs_adj[1:2, 1:10]
+```
+
+#### Assemble the input data 
+
+```{r}
+design_mat <- as.data.frame(brooklyn_geodata) %>%
+  select(pct_pubtransit, med_hh_inc, traffic, frag_index) %>%
+  mutate(med_hh_inc = log(med_hh_inc),
+         traffic = log(traffic))
+summary(design_mat)
+```
+
+```{r}
+pois_icar_data <- list(
+  N = nrow(brooklyn_geodata),
+  y = as.integer(brooklyn_geodata$count),
+  E = as.integer(brooklyn_geodata$kid_pop),
+  K = 4,
+  xs = design_mat,
+  N_edges = ncol(brooklyn_nbs_adj),
+  neighbors = brooklyn_nbs_adj
+)
+```
+
+## Fitting the ICAR Model on the Brooklyn data
+
+#### Model is compiled (as needed) on instantiation 
+
+```{r}
+pois_icar_mod = cmdstan_model(stan_file=poisson_icar_model_file)
+```
+
+#### Run the NUTS-HMC sampler, summarize results
+
+```{r}
+pois_icar_fit = pois_icar_mod$sample(data=pois_icar_data, parallel_chains=cores)
+pois_icar_fit 
+```
+
+## Model Comparison: ICAR vs. ordinary random effects
+
+```{r}
+pois_re_mod = cmdstan_model(stan_file=file.path(
+  'stan', 'poisson_re.stan')) 
+pois_re_fit = pois_re_mod$sample(data=pois_icar_data, parallel_chains=cores)
+pois_re_fit 
+```
+
+Which model provides a better fit (on the Brooklyn subset of the data)?
+
+### Visual comparison
+
+In R, we use the `bayesplot` package.
+In Python, we use `ArviZ`.
+
+#### ICAR model
+
+```{r}
+y_rep <- as_draws_matrix(pois_icar_fit$draws("y_rep"))
+ppc_dens_overlay(brooklyn_geodata$count, y_rep) +
+                 ggtitle("Posterior Predictive Check: Poisson ICAR model")
+```
+
+#### RE model
+
+```{r}
+y_rep <- as_draws_matrix(pois_re_fit$draws("y_rep"))
+ppc_dens_overlay(brooklyn_geodata$count, y_rep) +
+                 ggtitle("Posterior Predictive Check: Poisson RE model")
+```
+
+### Leave-one-out cross-validation (LOO)
+
+```{r}
+loo_icar_pois <- loo(pois_icar_fit$draws("log_lik"), save_psis = TRUE)
+loo_re_pois <- loo(pois_re_fit$draws("log_lik"), save_psis = TRUE)
+
+loo_compare(loo_icar_pois, loo_re_pois)
+```

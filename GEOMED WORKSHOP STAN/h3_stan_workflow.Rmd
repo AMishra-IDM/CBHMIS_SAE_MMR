@@ -1,0 +1,361 @@
+---
+title: "Stan Model Building Workflow"
+format:
+  html:
+    css: theming/quarto_styles.css 
+    syntax-definitions:
+      - theming/stan.xml
+    embed-resources: true
+    toc: true
+    toc-location: left
+    grid:
+      body-width: 1000px
+---
+
+When writing a Stan model, as when writing any other computer program,\
+*the fastest way to success is to go slowly.*
+
+* Incremental development
+   + Write a (simple) model
+   + Fit the model to data (either simulated or observed)
+   + Check the fit 
+
+* Then modify *(stepwise)* and repeat
+
+* Compare successive models
+
+## Notebook Setup
+
+```{r}
+library(sf)
+library(spdep) |> suppressPackageStartupMessages()
+library(ggplot2)
+library(tidyverse) |> suppressPackageStartupMessages()
+library(cmdstanr)
+library(posterior)
+library(bayesplot)
+library(loo)
+library(parallel)
+cores = floor(parallel::detectCores() / 2)
+```
+
+
+
+#### Load the NYC study data 
+
+```{r}
+nyc_geodata = st_read("data/nyc_study.geojson")
+names(nyc_geodata)
+table(nyc_geodata$BoroName)
+```
+
+#### Assemble the input data
+
+The data block of the model declares variables:
+
+- `N` - the number of census tracts
+- `y` - the array of observed outcomes - accidents per tract
+- `E` - the population per tract ("exposure")
+- `K` - the number of predictors
+- `xs` - the N x K data matrix of predictors
+
+The predictors from the study data are columns: `pct_pubtransit`,`med_hh_inc`, `traffic`, `frag_index`.
+
+```{r}
+design_mat <- as.data.frame(nyc_geodata) %>%
+  select(pct_pubtransit, med_hh_inc, traffic, frag_index) %>%
+  mutate(med_hh_inc = log(med_hh_inc),
+         traffic = log(traffic))
+
+pois_data <- list(
+  N = nrow(nyc_geodata),
+  y = as.integer(nyc_geodata$count),
+  E = as.integer(nyc_geodata$kid_pop),
+  K = 4,
+  xs = design_mat
+)
+```
+
+## Base Model:  `poisson.stan`
+
+This file is in directory `stan/poisson.stan`.
+
+```{r}
+poisson_model_file = file.path('stan', 'poisson.stan')
+cat(readLines(poisson_model_file), sep="\n")
+```
+
+#### Model is compiled (as needed) on instantiation 
+
+```{r}
+pois_mod = cmdstan_model(stan_file=poisson_model_file)
+```
+
+#### Run the NUTS-HMC sampler 
+
+```{r}
+pois_fit = pois_mod$sample(data=pois_data, parallel_chains=cores)
+```
+
+#### Summarize the results
+
+```{r}
+pois_fit
+```
+
+## Refinement: Mean-Center Predictor Data
+
+*In theory*, much discussion and debate about doing this -
+start
+[here](https://www.goldsteinepi.com/blog/thewhyandwhenofcenteringcontinuouspredictorsinregressionmodeling/index.html),
+follow the links and keep going.
+
+*In practice*, ***this helps, alot!*** and is often necessary in order to fit the model.
+The BRMS package centers continuous data values on zero - [discussion here](https://discourse.mc-stan.org/t/brms-input-scaling-clarification/23601/3).
+
+Doing this requires two additions to the model
+
+1. In the `transformed data` block, compute the mean of a data column, then subtract the mean from the column.
+
+2. If the regression has an intercept term, in the `generated quantities` block, adjust for this by adding back the dot-product of the mean values of each column and the regression coefficient vector to it.
+
+There are the key changes / additions to the base model 
+
+```stan
+data {
+  // no change 
+}
+transformed data {
+  // center continuous predictors 
+  vector[K] means_xs;  // column means of xs before centering
+  matrix[N, K] xs_centered;  // centered version of xs
+  for (k in 1:K) {
+    means_xs[k] = mean(xs[, k]);
+    xs_centered[, k] = xs[, k] - means_xs[k];
+  }
+}
+parameters {
+  // no change 
+}
+model {
+  y ~ poisson_log(log_E + beta0 + xs_centered * betas);   // centered data
+  // priors same
+}
+generated quantities {
+  real beta_intercept = beta0 - dot_product(means_xs, betas);  // adjust intercept
+  // compute log_lik, y_rep 
+  {
+    vector[N] eta = log_E + beta0 + xs_centered * betas;   // centered data
+    //  ..
+  }
+}
+```
+
+Compile and fit the model, print the summary.
+
+```{r}
+pois_xc_mod = cmdstan_model(stan_file=file.path(
+  'stan', 'poisson_ctr_preds.stan')) 
+pois_xc_fit = pois_xc_mod$sample(data=pois_data, parallel_chains=cores)
+pois_xc_fit
+```
+
+How do the samples differ?
+
+```{r}  
+print("data matrix not transformed")   
+pois_fit
+```
+
+
+## Predictor Data Scales
+
+The data variables are on different scales
+
+| Measures                                              | Median | Min    | Mean     | Max       |
+|-------------------------------------------------------|--------|--------|----------|-----------|
+| Med. household income in USD, 2010-14                 | \$53,890| \$9,327 | \$58,497  | \$232,266  |
+| Pct. commute by walk/cycle/public trans, 2010-14      | 73.9   | 9.7    | 69.8     | 100.0     |
+| Standardized social fragmentation index               | -0.1   | -6.7   | 0.0      | 18.7      |
+| Traffic Volume (AADT), 2015                           | 19,178 | 843    | 37,248   | 276,476   |
+
+In the previous steps, the predictor variables `med_hh_inc` and `traffic` were log-transformed.
+What happens if we just use the raw data values?
+
+```{r}
+design_mat_2 <- as.data.frame(nyc_geodata) %>%
+  select(pct_pubtransit, med_hh_inc, traffic, frag_index)
+
+pois_data_2 <- list(
+  N = nrow(nyc_geodata),
+  y = as.integer(nyc_geodata$count),
+  E = as.integer(nyc_geodata$kid_pop),
+  K = 4,
+  xs = design_mat_2
+)
+
+print(summary(design_mat))
+print(summary(design_mat_2))
+```
+
+Run the base model on this data 
+
+```{r, eval=FALSE}
+pois_fit_2 = pois_mod$sample(data=pois_data_2, parallel_chains=cores)
+pois_fit_2
+```
+
+The model that transforms the data matrix fails for the same fundamental reason:
+the regression component `xs * betas` or `xs_centered * betas` cannot be computed,
+it either overflows or underflow because the predictors are on wildly different scales.
+(Transforming the data fails faster because it both both `traffic` and `med_hh_inc`
+include large negative values - this underflows consistently.)
+
+```{r, eval=FALSE}
+pois_xc_mod$sample(data=pois_data_2, parallel_chains=cores)
+```
+
+#### Takeaway
+
+To improve model fit and processing speed, predictors should be on the same scale.
+
+*But* remember to account for any rescaling when trying to interpret the fitted coefficients! 
+
+## Model Checking:  The Posterior Predictive Check 
+
+From the [Stan Users Guide](https://mc-stan.org/docs/stan-users-guide/posterior-predictive-checks.html#simulating-from-the-posterior-predictive-distribution)
+
+>Posterior predictive checks are a way of measuring whether a model
+does a good job of capturing relevant aspects of the data, such as
+means, standard deviations, and quantiles.
+
+>The posterior predictive distribution is the distribution over new
+observations given previous observations.  It's predictive in the
+sense that it's predicting behavior on new data that is not part of
+the training set.  It's posterior in that everything is conditioned on
+observed data $y$.
+
+>The posterior predictive distribution for replications
+$y^{\textrm{rep}}$ of the original data set $y$ given model parameters
+$\theta$ is defined by
+$$
+p(y^{\textrm{rep}} \mid y)
+= \int p(y^{\textrm{rep}} \mid \theta)
+       \cdot p(\theta \mid y) \, \textrm{d}\theta.
+$$
+
+
+#### Posterior predictive density overlay plots
+
+The variable `y_rep` is a *simulated* dataset based on the observed data and the estimated parameters, using Stan's PRNG function `poisson_log_rng`,
+thus the sample contains a set of random datasets all conditioned on the observed data (nyc_geodata['count']).
+
+The posterior predictive density overlay plot compares the distribution of the observed data to the distribution of some of the simulated datasets (`y_rep`).
+
+In R, this is available from the [bayesplot](https://mc-stan.org/bayesplot) package as function [`ppc_dens_overlay`](https://mc-stan.org/bayesplot/articles/graphical-ppcs.html#ppc_dens_overlay).
+
+
+```{r}
+y_rep <- as_draws_matrix(pois_xc_fit$draws("y_rep"))
+ppc_dens_overlay(nyc_geodata$count, y_rep) +
+                 ggtitle("Posterior Predictive Check: Poisson model")
+```
+
+To create the equivalent plot in Python (or directly using ggplot):
+
+1. select a random set of draws from the output.
+2. create a ggplot plot
+3. add  to the plot the density each simulated dataset  (thin line, light color, relatively transparent)
+4. add to the plot the density of the observed data (heavy line, dark color)
+
+## Refinement:  Add random effects
+
+The Poisson distribution provides a single parameter $\lambda$, which is both mean and variance.
+As the above plots show, the data is overdispersed - the observed variance is greater than expected.
+To improve the model fit, we can add an ordinary random-effects component - this will account for per-tract heterogeneity.
+(Not to get head of ourselves, but this is one component in the BYM model).
+
+There are the key changes / additions to the base model 
+ 
+```stan
+data {
+  // no change 
+}
+transformed data {
+  // no change, (center continuous predictors)
+}
+parameters {
+  real beta0; // intercept
+  vector[K] betas; // covariates
+  vector[N] theta; // heterogeneous random effects
+  real<lower=0> sigma; // random effects variance 
+}
+model {
+  y ~ poisson_log(log_E + beta0 + xs_centered * betas + theta * sigma);
+  beta0 ~ std_normal();
+  betas ~ std_normal();
+  theta ~ std_normal();
+  sigma ~ normal(0, 5);
+}
+generated quantities {
+  // compute log_lik, y_rep 
+  {
+    vector[N] eta = log_E + beta0 + xs_centered * betas + theta * sigma;
+    // ..
+  }
+}
+
+```
+Compile the model, fit the data, print the fit.
+
+```{r}
+pois_re_mod = cmdstan_model(stan_file=file.path(
+  'stan', 'poisson_re.stan')) 
+pois_re_fit = pois_re_mod$sample(data=pois_data, parallel_chains=cores)
+pois_re_fit 
+```
+
+How do the samples differ from the base model?
+
+```{r}
+pois_xc_fit 
+```
+
+Run the PPC plots
+
+```{r}
+y_rep_re <- as_draws_matrix(pois_re_fit$draws("y_rep"))
+ppc_dens_overlay(nyc_geodata$count, y_rep_re) +
+                 ggtitle("Posterior Predictive Check: Poisson + RE Model") 
+```
+
+
+```{r}
+ppc_dens_overlay(nyc_geodata$count, y_rep) +
+                 ggtitle("Posterior Predictive Check: Poisson Model") 
+```
+
+## Model Comparison
+
+
+#### Leave-one-out cross-validation (LOO)
+
+
+The [loo package](https://mc-stan.org/loo/) provides an implementation of the algorithm presented in
+
+* Vehtari, A., Gelman, A. & Gabry, J. Practical Bayesian model evaluation using leave-one-out cross-validation and WAIC. Stat Comput 27, 1413–1432 (2017). https://doi.org/10.1007/s11222-016-9696-4
+* Vehtari, A.,Simpson, D.P.,  Gelman, A., Yao, Y., & Gabry, J. Pareto Smoothed Importance Sampling, arxiv, 2024. https://arxiv.org/abs/1507.02646
+
+Pareto-smoothed importance sampling (PSIS) provides stabilized effective sample size estimates, Monte Carlo error estimates, and convergence diagnostics and provide a way to efficiently perform
+leave-one-out (LOO) cross-valiation, which allows us to compare predictive errors between two models.
+
+In R,  we can do model comparison using the `loo` package.
+
+**R**
+
+```{r}
+loo_xc_pois <- loo(pois_xc_fit$draws("log_lik"), save_psis = TRUE)
+loo_re_pois <- loo(pois_re_fit$draws("log_lik"), save_psis = TRUE)
+
+loo_compare(loo_xc_pois, loo_re_pois)
+```
