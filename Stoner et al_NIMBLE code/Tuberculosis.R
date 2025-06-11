@@ -8,8 +8,8 @@ set.seed(seed) # Set the seed (found in the Master script).
 # Part One: Setup
 
 # Set up necessary data for the ICAR prior.
-adjacency=unlist(neighbourhood)
-n_adj=card(neighbourhood)
+adjacency=unlist(neighbourhood)  ## AM: neighborhood is a list for each microreg and gives the neighboring mr-- this unlists that into a vector
+n_adj=card(neighbourhood) ## AM: this tells you how many neighbors each region has
 l_adj=length(adjacency)
 weights=rep(1,l_adj)
 
@@ -17,6 +17,7 @@ TB_N=length(TBdata$TB) # Number of observations.
 n_regions=length(n_adj) # Number of regions.
 
 total_obs=c(sum(TBdata$TB[1:n_regions]),sum(TBdata$TB[(1:n_regions)+n_regions]),sum(TBdata$TB[(1:n_regions)+2*n_regions]))
+#AM total number of TB cases by year
 
 # Set up index for spatial parameters rho and delta.
 region_index=numeric(n_regions)
@@ -24,7 +25,7 @@ for(i in 1:n_regions){
   region_index[i]=which(brasil_micro$COD_MICRO==TBdata$Identifier[i])
 }
 region_index=rep(region_index,3)
-
+## AM is a linking vector between TBdata and brasil_micro
 
 # Create polynomials.
 poly_tim=poly(TBdata$Timeliness,3)
@@ -39,8 +40,10 @@ tran_ind=TBdata$Indigenous-mean(TBdata$Indigenous)
 # Produce a map of the tuberculosis cases.
 brasil_map=map_data(brasil_micro)
 brasil_map$region=as.numeric(brasil_map$region)
-brasil_map$region[brasil_map$region<=187]=brasil_map$region[brasil_map$region<=187]+1 
+brasil_map$region[brasil_map$region<=187]=brasil_map$region[brasil_map$region<=187]+1  #AM: This is some kind of manual correction I think
 brasil_map$incidence=300000*(brasil_micro$TBcases.2012/brasil_micro$Pop2012+brasil_micro$TBcases.2013/brasil_micro$Pop2013+brasil_micro$TBcases.2014/brasil_micro$Pop2014)[brasil_map$region]
+#AM: This is the number of TB cases per 100,000 averaged over 3 years
+
 
 ggplot() + geom_polygon(data = brasil_map, aes(x=long, y = lat, group = group,fill=incidence))+ggtitle('New Tuberculosis Cases 2012-2014') +
   theme_void() +
@@ -68,19 +71,19 @@ ggsave('data.pdf',device='pdf',width=6,height=6)
 
 # Model code.
 TB_code=nimbleCode({ 
-  for(i in 1:n){
-    pi[i] <- ilogit(b[1]+tim[i,1]*b[2]+tim[i,2]*b[3]+tim[i,3]*b[4]+gamma[i])
-    lambda[i] <- exp(log(pop[i])+a[1]+unem[i,1]*a[2]+unem[i,2]*a[3]+
-                       urb[i,1]*a[4]+urb[i,2]*a[5]+den[i,1]*a[6]+
-                       den[i,2]*a[7]+ind[i]*a[8]+phi[index[i]]+theta[index[i]])
-    z[i] ~ dpois(pi[i]*lambda[i])
-    gamma[i]~dnorm(0,sd=epsilon)
-  }
+  for(i in 1:n){  #AM: see below n is the number of obs (space + time)
+    pi[i] <- ilogit(b[1]+tim[i,1]*b[2]+tim[i,2]*b[3]+tim[i,3]*b[4]+gamma[i])  #AM: This is the model for under-reporting. tim will be the polynomial for the timeliness -- note each polynomial gets own parameter
+    lambda[i] <- exp(log(pop[i])+a[1]+unem[i,1]*a[2]+unem[i,2]*a[3]+   #AM: This is the model for incidence rate
+                       urb[i,1]*a[4]+urb[i,2]*a[5]+den[i,1]*a[6]+      
+                       den[i,2]*a[7]+ind[i]*a[8]+phi[index[i]]+theta[index[i]])  #AM: phi is the spatial effect and is not over time, so such be length n_regions. index[i] will give you the region index for the space-time observation
+    z[i] ~ dpois(pi[i]*lambda[i])   #AM: This is the marginal distribution of y not conditional. P(Z|Y)*P(Y) yields this distribution drawing from this speeds up sampling
+    gamma[i]~dnorm(0,sd=epsilon)    #AM: dist for gamma random effect (unstructured random effect on reporting)  
+  }                           
   for(j in 1:R){
-    theta[j] ~ dnorm(0,sd=sigma)
+    theta[j] ~ dnorm(0,sd=sigma)    #AM: prior for theta (unstructured random effect on incdience)
   }
-  phi[1:R] ~ dcar_normal(adj=adj[1:l_adj], num=n_adj[1:R], tau=tau,zero_mean=1)
-  a[1] ~ dnorm(-8,sd=1)
+  phi[1:R] ~ dcar_normal(adj=adj[1:l_adj], num=n_adj[1:R], tau=tau,zero_mean=1)   #random for the saptial effect model, first two are the adjacecy matrix, tau is precision, zero_mean constraint for identifiability
+  a[1] ~ dnorm(-8,sd=1)             #AM: Everything below here are the priors
   for(i in 2:8){
     a[i] ~ dnorm(0,sd=10)
   }
@@ -94,13 +97,20 @@ TB_code=nimbleCode({
   tau <- 1/nu^2
 })
 
+
+
+
+
 # Set up data for NIMBLE.
+#AM: NIMBLE requires constants and data to be set-up separately. 
+# Constatnst can't be changed after creating the model --> Think non stochastic processes
+# data are assumed to be stochastic processes (usually just the outcome then)
 TB_constants=list(n=TB_N,pop=TBdata$Population,ind=tran_ind,n_adj=n_adj,
                   adj=adjacency,tim=poly_tim,unem=poly_unem,urb=poly_urb,den=poly_den,
                   R=n_regions,index=region_index,w=weights,l_adj=length(adjacency))
 TB_data=list(z=TBdata$TB)
 
-# Set initial values.
+# Set initial values.  #AM: Paper uses four chains so this is why there are four lines here
 TB_inits1=list(sigma=0.25,nu=1,epsilon=0.25,a=c(-7,rep(-0.1,7)),b=c(1.8,rep(0.1,3)),
               gamma=rnorm(TB_N,0,0.25),phi=rnorm(n_regions,0,1),theta=rnorm(n_regions,0,0.25))
 TB_inits2=list(sigma=0.5,nu=0.75,epsilon=0.5,a=c(-7,rep(0.1,7)),b=c(1.8,rep(-0.1,3)),
