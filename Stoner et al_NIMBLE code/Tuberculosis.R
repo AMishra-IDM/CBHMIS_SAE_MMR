@@ -126,19 +126,29 @@ TB_model <- nimbleModel(TB_code, TB_constants,TB_data,TB_inits)
 TB_compiled_model <- compileNimble(TB_model,resetFunctions = TRUE)
 
 # Set up samplers.
+#AM: I think this is deciding which samplers to use for each parameter
+#AM: Monitors are which parameters you want to save and look at in output
+#AM: useConjuacy is to use conjugate samplers where apprirate 
 TB_mcmc_conf <- configureMCMC(TB_model,monitors=c('a','b','sigma','tau','epsilon',
                                                   'pi','lambda','phi','theta'),useConjugacy = TRUE)
+#AM: The authors wanted to change the samplers here -- not sure why they chose this sampler
+#    but the said it in the paper?
 TB_mcmc_conf$removeSamplers(c('a[1]','b[1]','sigma','nu','epsilon'))
 TB_mcmc_conf$addSampler(target=c('a[1]','b[1]','epsilon'),type='AF_slice')
 TB_mcmc_conf$addSampler(target=c('sigma','nu'),type='AF_slice')
 
-TB_mcmc<-buildMCMC(TB_mcmc_conf)
+TB_mcmc<-buildMCMC(TB_mcmc_conf)  
 TB_compiled_mcmc<-compileNimble(TB_mcmc, project = TB_model,resetFunctions = TRUE)
 
 # Run the model (a few hours).
+# AM: making smaller number of interations/burn-in just for testing purposes
+# TB_samples=runMCMC(TB_compiled_mcmc,inits=TB_inits,
+#                    nchains = 4, nburnin=400000,niter = 800000,samplesAsCodaMCMC = TRUE,thin=40,
+#                    summary = FALSE, WAIC = FALSE,setSeed=c(seed,2*seed,3*seed,4*seed)) 
+
 TB_samples=runMCMC(TB_compiled_mcmc,inits=TB_inits,
-                   nchains = 4, nburnin=400000,niter = 800000,samplesAsCodaMCMC = TRUE,thin=40,
-                   summary = FALSE, WAIC = FALSE,setSeed=c(seed,2*seed,3*seed,4*seed)) 
+                   nchains = 4, nburnin=10,niter = 100,samplesAsCodaMCMC = TRUE,thin=1,
+                   summary = FALSE, WAIC = FALSE,setSeed=c(seed,2*seed,3*seed,4*seed))
 
 # Check chains for convergence.
 plot(TB_samples[,c('a[1]','a[2]','a[3]','a[4]','a[5]','a[6]','a[7]','a[8]',
