@@ -44,9 +44,9 @@
 "Zaria","Dambo",18
 "Lere","Dan-Alhaji",10
 "Lere","Danalhaji",10
-"Markafi","Dandamisa",18
-"Markafi","Danguziri",9
-"Markafi","Danguzuri",11
+"Makarfi","Dandamisa",18
+"Makarfi","Danguziri",9
+"Makarfi","Danguzuri",11
 "Giwa","Danmahawayi",18
 "Soba","Danwata",18
 "Kauru","Dari",12
@@ -78,26 +78,25 @@
 "Lere","Garu_mariri",9
 "Soba","Garun_Gwanki",8
 "Birnin_Gwari","Gayam",17
-"Markafi","Gazara",18
+"Makarfi","Gazara",18
 "Kauru","Geshere",16
 "Zangon_Kataf","Gidan Jatau",8
 "Kachia","Gidan Tagwai",12
 "Jemaa","Gidan Waya",10
-"Zango_Kataf","Gidan_jatau",3
+"Zangon_Kataf","Gidan_jatau",3
 "Kachia","Gidan_tagwai",8
 "Jemaa","Gidan_waya",6
 "Soba","Gimba",18
-"Markafi","Gimi",18
+"Makarfi","Gimi",18
 "Giwa","Giwa",18
 "Jemaa","Godo Godo",10
-"Zango_Kataf","Gora",2
-"Zangon_Kataf","Gora",13
-"Markafi","Gubuchi",18
+"Zangon_Kataf","Gora",15
+"Makarfi","Gubuchi",18
 "Kachia","Gumel",18
 "Lere","Gure/Kahugu",11
 "Lere","Gure_kahugu",9
 "Chikun","Gwagwada",9
-"Markafi","Gwanki",17
+"Makarfi","Gwanki",17
 "Sanga","Gwantu",18
 "Igabi","Gwaraji",18
 "Zaria","Gyallesu",17
@@ -111,8 +110,7 @@
 "Kajuru","Idon",18
 "Igabi","Igabi",15
 "Ikara","Ikara",17
-"Zango_Kataf","Ikulu",6
-"Zangon_Kataf","Ikulu",12
+"Zangon_Kataf","Ikulu",15
 "Jemaa","Jagindi",17
 "Sabon_Gari","Jamaa",15
 "Ikara","Jamfalan",17
@@ -143,8 +141,7 @@
 "Kaduna_South","Kakuri_gwari",8
 "Kaduna_South","Kakuri_hausa",1
 "Kajuru","Kallah",18
-"Zango_Kataf","Kamantan",1
-"Zangon_Kataf","Kamantan",9
+"Zangon_Kataf","Kamantan",10
 "Kauru","Kamaru",17
 "Jemaa","Kaninkon",18
 "Kubau","Kareh",11
@@ -207,8 +204,7 @@
 "Zaria","Limancin Kona",12
 "Zaria","Limancin_kona",8
 "Kudan","Lokoro",18
-"Zango_Kataf","Madakiya",4
-"Zangon_Kataf","Madakiya",11
+"Zangon_Kataf","Madakiya",15
 "Birnin_Gwari","Magajin Gari 1",12
 "Birnin_Gwari","Magajin Gari 2",10
 "Birnin_Gwari","Magajin Gari 3",4
@@ -219,17 +215,17 @@
 "Soba","Maigana",18
 "Jemaa","Maigizo",10
 "Kauru","Makami",18
-"Markafi","Makarfi",16
+"Makarfi","Makarfi",16
 "Kaduna_South","Makera",16
 "Kaura","Mallagum",16
 "Kaura","Manchok",17
 "Kajuru","Maro",15
-"Markafi","Mayere",16
+"Makarfi","Mayere",16
 "Sabon_Gari","Muchia",14
 "Sanga","Nandu",16
 "Chikun","Narayi",16
-"Markafi","Nasarawan_doya",9
-"Markafi","Nasarawan_Doya",12
+"Makarfi","Nasarawan_doya",9
+"Makarfi","Nasarawan_Doya",12
 "Chikun","Nassarawa",18
 "Jaba","Nduya",16
 "Sanga","Ninzo North",10
@@ -292,13 +288,13 @@
 "Kajuru","Tantatu",18
 "Kaduna_South","Television",17
 "Kaduna_South","Tudun Nupawa",12
-"Markafi","Tudun Wada",12
+"Makarfi","Tudun Wada",12
 "Zaria","Tudun Wada",12
 "Kaduna_South","Tudun Wada Nrth",13
 "Kaduna_South","Tudun Wada South",12
 "Zaria","Tudun wada_zaria",9
 "Kaduna_South","Tudun_nupawa",4
-"Markafi","Tudun_wada",9
+"Makarfi","Tudun_wada",9
 "Kaduna_South","Tudun_wada_north",4
 "Kaduna_South","Tudun_wada_south",8
 "Zaria","Tukur Tukur",13
@@ -314,10 +310,10 @@
 "Kaduna_North","Unguwan Shanu",12
 "Kaduna_North","Unguwan_dosa",9
 "Sabon_Gari","Unguwan_gabas",6
-"Zango_Kataf","Unguwan_gaiya",9
+"Zangon_Kataf","Unguwan_gaiya",9
 "Zaria","Unguwan_juma",8
 "Kaduna_North","Unguwan_rimi",8
-"Zango_Kataf","Unguwan_rimi_zango",6
+"Zangon_Kataf","Unguwan_rimi_zango",6
 "Kaduna_North","Unguwan_sarki",9
 "Kaduna_North","Unguwan_shanu",9
 "Kaduna_North","Unguwar Sarki",11
@@ -333,14 +329,12 @@
 "Sabon_Gari","Zabi",17
 "Kudan","Zabi_kudan",7
 "Zangon_Kataf","Zaman Dabo",12
-"Zango_Kataf","Zaman_dabo",9
+"Zangon_Kataf","Zaman_dabo",9
 "Zangon_Kataf","Zango Urban",9
-"Zango_Kataf","Zango_urban",8
+"Zangon_Kataf","Zango_urban",8
 "Igabi","Zangon Aya",12
 "Igabi","Zangon_aya",9
 "Kaura","Zankan",15
-"Zango_Kataf","Zonkwa",2
-"Zangon_Kataf","Zonkwa",8
-"Zango_Kataf","Zonzon",9
-"Zangon_Kataf","Zonzon",12
+"Zangon_Kataf","Zonkwa",10
+"Zangon_Kataf","Zonzon",18
 "Kubau","Zuntu",17
