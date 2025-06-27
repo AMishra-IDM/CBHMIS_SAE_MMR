@@ -10,6 +10,8 @@ library(nimble)
 
 rm(list=ls())
 
+start_time <- Sys.time()
+
 set.seed(105)
 setwd("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR")
 outdir <- "C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR/output/"
@@ -70,7 +72,7 @@ compiled_model <- compileNimble(mmr_model)
 # --- Configure MCMC ---
 ### DECIDE IF WANT WAIC here
 mmr_conf <- configureMCMC(mmr_model,
-                          monitors = c("a", "b", "sigma", "epsilon", "nu", "phi", "theta", "pi", "lambda"),
+                          monitors = c("a", "b", "sigma", "epsilon", "tau", "phi", "theta", "pi", "lambda"),
                           useConjugacy = TRUE)
 
 # Customize samplers (e.g., slice sampling for highly correlated terms) -- Not sure if I need this, but following STONER paper
@@ -85,10 +87,23 @@ compiled_mcmc <- compileNimble(mmr_mcmc, project = mmr_model)
 # --- Run model (example: 4 chains × 100,000 iterations each) ---
 samples <- runMCMC(compiled_mcmc,
                    nchains = 4,
-                   niter = 50000,
-                   nburnin = 25000,
+                   niter = 200000,
+                   nburnin = 50000,
                    thin = 1,
-                   summary = TRUE,
-                   WAIC = FALSE)
+                   summary = FALSE,
+                   WAIC = TRUE)
 
-saveRDS(samples, file = paste0(outdir,"/NIMBLE output/samples_full_output.rds"))
+# saveRDS(samples, file = paste0(outdir,"/NIMBLE output/samples_full_output.rds"))
+end_time <- Sys.time()
+
+elapsed_time <- end_time - start_time
+print(elapsed_time)
+
+
+#### NEEDED FOR SAVING TO CLUSTER ###
+# https://adb-8293166442374260.0.azuredatabricks.net/explore/data/volumes/idm_general/cbhmis_sae_mmr/cbhmis_sae_mmr?o=8293166442374260
+# file_name = "samples_test_output.rds"
+# rds_save_path = paste0("/Volumes/idm_general/cbhmis_sae_mmr/cbhmis_sae_mmr/", file_name)
+# dir.create(dirname(rds_save_path), showWarnings = F, recursive = T)
+# 
+# saveRDS(samples, file = rds_save_path)

@@ -6,6 +6,7 @@
 ##   Author: Anu Mishra                                        ##  
 ##   Created 6/9/25                                            ##
 #################################################################
+
 library(sf)
 library(spdep)
 library(mapview)
@@ -14,9 +15,9 @@ library(ggplot2)
 library(patchwork)
 library(terra)
 library(lubridate)
+library(exactextractr)
+library(Polychrome)
 
-
-rm(list=ls())
 set.seed(105)
 
 setwd("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR")
@@ -60,7 +61,7 @@ ward_counts <- aggregate(Ward ~ LGA, data = cbhmis, FUN = function(x) length(uni
 ward_time_counts <- aggregate(id ~ LGA  + Ward + time, data = cbhmis, FUN = length)  ## number of duplicate ward/month
 names(ward_time_counts)[4] <- "count" 
 ward_time_counts[ward_time_counts$count>1,]
-write.csv(ward_time_counts[ward_time_counts$count>1,],paste0(outdir,"raw data checks/duplicates.csv"))
+write.csv(ward_time_counts[ward_time_counts$count>1,],paste0(outdir,"data checks/duplicates.csv"))
 
 
 #only keeping last submission
@@ -79,7 +80,7 @@ names(ward_time_counts_clean)[4] <- "count"
 ward_counts_clean <- aggregate(id ~ LGA  + Ward , data = cbhmis_clean, FUN = length)  ## number of duplicate ward/month
 names(ward_counts_clean)[3] <- "count" 
 hist(ward_counts_clean$count) ## shouldn't have more than 18 obs per ward given the months we've included
-write.csv(ward_counts_clean,paste0(outdir,"raw data checks/num_obs_per_ward.csv"),row.names = F)
+write.csv(ward_counts_clean,paste0(outdir,"data checks/num_obs_per_ward.csv"),row.names = F)
 
 # some manual cleaning -- total number of CVs and rep CVs clearly getting enetered in one cell here
 cbhmis_clean$Total.number.of.CVs.in.the.ward <- ifelse(cbhmis_clean$Total.number.of.CVs.in.the.ward>1000, 
@@ -101,7 +102,7 @@ names(cbhmis_clean) <- c("LGA", "Ward","time","totalCVs","repCVs",
 
 #### A: Spatial data for adjacency matrix in model #### 
 #Nigeria shape file from GADM
-nga_shp <- st_read("raw data/gadm41_NGA_shp/gadm41_NGA_2.shp")
+nga_shp <- st_read("/raw data/gadm41_NGA_shp/gadm41_NGA_2.shp")
 kdn_shp <- nga_shp[nga_shp$NAME_1=="Kaduna",]
 kdn_shp$NAME_2 <- gsub(pattern = " ",replacement = "_", kdn_shp$NAME_2)
 kdn_shp$NAME_2 <- gsub(pattern = "'",replacement = "", kdn_shp$NAME_2)
@@ -132,7 +133,7 @@ p1
 
 
 ## aggregating to LGA level
-cbhmis_lga <- cbhmis_clean[,!names(cbhmis_clean) %in% c("Ward","repRate","Ward_color_group")] %>% 
+cbhmis_lga <- cbhmis_clean[,!names(cbhmis_clean) %in% c("Ward","repRate","Ward_color_group","sub_time")] %>% 
                   group_by(time, LGA) %>% summarise(across(everything(), sum))
 
 cbhmis_lga$repRate <- 100*cbhmis_lga$repCVs/cbhmis_lga$totalCVs
@@ -183,7 +184,9 @@ referral_vars <- c("ANC_ref","FP_ref","LD_ref","PNC_ref","PPFP_ref","Imm_ref","N
 ### NEEDS FOLLOW_UP: Use consistent population data once decided
 
 ## We load in external population data to scale the referral data
-pop_wra <- rast("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Data/Population data/NGA_population_v2_1_agesex/NGA_population_v2_1_agesex/NGA_population_v2_1_agesex_f15_49.tif")
+pop_wra <- rast("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR/raw data/NGA_population_v2_1_agesex_f15_49.tif")
+plot(pop_wra) 
+
 boundary <- kdn_shp
 boundary$wra_pop <- exact_extract(pop_wra, boundary, 'sum')
 
@@ -483,17 +486,19 @@ pANCvis
 dev.off()
 
 
-## Calculate average over the observation period
+## Calculate average over the observation period and standardize by WRA pop
 ancAvg <- anc_long %>%
   group_by(visit_type, LGA) %>%
   summarise(across(where(is.numeric), ~ mean(.x, na.rm = TRUE)), .groups = "drop")
 
+ancAvg <- left_join(ancAvg,pop_dat,by=c("LGA"="NAME_2"))
+ancAvg$val_std <- ancAvg$value/ancAvg$wra_pop * 1000
+
+#### NEEDS FU: MAKE SURE USING CONSISTENT WRA ESTIMATE
+
 ## convert to wide
-ancAvg <- ancAvg %>%
-  pivot_wider(
-    names_from = visit_type,
-    values_from = value
-  )
+ancAvg <- ancAvg %>% select(LGA,visit_type,val_std) %>% spread(visit_type, val_std)
+
 
 
 
