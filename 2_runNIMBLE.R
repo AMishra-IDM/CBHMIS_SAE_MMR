@@ -73,7 +73,7 @@ compiled_model <- compileNimble(mmr_model)
 ### DECIDE IF WANT WAIC here
 mmr_conf <- configureMCMC(mmr_model,
                           monitors = c("a", "b", "sigma", "epsilon", "tau", "phi", "theta", "pi", "lambda"),
-                          useConjugacy = TRUE)
+                          useConjugacy = TRUE,enableWAIC = TRUE)
 
 # Customize samplers (e.g., slice sampling for highly correlated terms) -- Not sure if I need this, but following STONER paper
 mmr_conf$removeSamplers(c("a[1]", "b[1]", "sigma", "nu", "epsilon"))
@@ -91,6 +91,7 @@ samples <- runMCMC(compiled_mcmc,
                    nburnin = 50000,
                    thin = 1,
                    summary = FALSE,
+                   samplesAsCodaMCMC = TRUE,
                    WAIC = TRUE)
 
 # saveRDS(samples, file = paste0(outdir,"/NIMBLE output/samples_full_output.rds"))
