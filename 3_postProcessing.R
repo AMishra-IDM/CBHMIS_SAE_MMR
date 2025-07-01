@@ -185,9 +185,9 @@ correction_samples <- 1 / pi_samples
 z_samples <- lambda_samples * pi_samples
 
 # Extract summaries of key outcomes
-y_summary   <- extract_param_summary(samp_matrix, "y")
-z_summary   <- extract_param_summary(samp_matrix, "z")
-pi_summary  <- extract_param_summary(samp_matrix, "pi")
+y_summary   <- summarize_draws(samp_matrix, "y")
+z_summary   <- summarize_draws(samp_matrix, "z")
+pi_summary  <- summarize_draws(samp_matrix, "pi")
 
 # get births in matrix form
 b_i <- nimble_data$live_births
