@@ -22,7 +22,7 @@ dir.create(model_out_dir)
 
 #### Load NIMBLE data
 load("nimble_inputs_final.RData")
-modDate <- read.csv("cbhmis_data_for_model.csv")
+modData <- read.csv("cbhmis_data_for_model.csv")
 
 
 # --- Model code block ---
@@ -66,7 +66,8 @@ mmr_code <- nimbleCode({
   # Priors: variance parameters   --- these are truncated normal distributions truncated at 0
   sigma ~ T(dnorm(0, 1), 0, )                              #sigma SD for theta (unstructred RE for incidence)
   epsilon ~ T(dnorm(0, 1), 0, )                            #epsilon SD for gamma (unstructred RE for reporting)
-  nu ~ T(dnorm(0, 1), 0, )
+  #nu ~ T(dnorm(0, 1), 0, )
+  #nu ~ T(dnorm(0, 2), 0, )                                #Update 7/2, trying a slightly more prior
   tau <- 1 / (nu^2)                                        #tau is precision (1/var) for spatial RE
 })
 
@@ -77,7 +78,7 @@ mmr_code <- nimbleCode({
 nimble_data_prior <- nimble_data
 nimble_inits_prior <- nimble_inits
 nimble_data_prior$z <- NULL
-nimble_inits_prior$z <- rep(NA, nrow(modDate))
+nimble_inits_prior$z <- rep(NA, nrow(modData))
 
 mmr_model <- nimbleModel(mmr_code, constants = nimble_constants, data = nimble_data_prior, inits = nimble_inits_prior)
 compiled_model <- compileNimble(mmr_model)
@@ -111,7 +112,7 @@ hist(total_y, main = "Prior Predictive: Total True Deaths (y)", xlab = "Sum(y_i)
 
 mmr_all <- do.call(rbind, lapply(sim_results, `[[`, "MMR"))  # rows = simulations, cols = LGAs
 boxplot(mmr_all, main = "Prior Predictive MMR by LGA", ylab = "MMR",ylim=c(0,1e6))
-points(modDate$MMR, col = "red", pch = 16)  # observed overlay
+points(modData$MMR, col = "red", pch = 16)  # observed overlay
 
 pi_all <- do.call(rbind, lapply(sim_results, `[[`, "pi"))
 hist(pi_all, breaks = 30, main = "Prior Predictive: Reporting Probability (π)", xlab = "π_i")

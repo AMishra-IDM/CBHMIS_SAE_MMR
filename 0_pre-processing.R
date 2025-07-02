@@ -17,13 +17,13 @@ library(terra)
 library(lubridate)
 library(exactextractr)
 library(Polychrome)
+library(ggrepel)
 
 set.seed(105)
 
 setwd("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR")
 
-outdir <- "C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR/output/"
-cbhmis <- readxl::read_xlsx("raw data/Kaduna_Final Data for Analysis.xlsx",sheet="Merged Data")
+cbhmis <- readxl::read_xlsx("raw data/Kaduna_Final Data for Analysis_corrected.xlsx",sheet="Merged Data")
 names(cbhmis) <- gsub(pattern = " ",replacement = ".",x=names(cbhmis))
 
 #light data cleaning 
@@ -61,7 +61,7 @@ ward_counts <- aggregate(Ward ~ LGA, data = cbhmis, FUN = function(x) length(uni
 ward_time_counts <- aggregate(id ~ LGA  + Ward + time, data = cbhmis, FUN = length)  ## number of duplicate ward/month
 names(ward_time_counts)[4] <- "count" 
 ward_time_counts[ward_time_counts$count>1,]
-write.csv(ward_time_counts[ward_time_counts$count>1,],paste0(outdir,"data checks/duplicates.csv"))
+write.csv(ward_time_counts[ward_time_counts$count>1,],paste0("data checks/duplicates.csv"))
 
 
 #only keeping last submission
@@ -80,7 +80,7 @@ names(ward_time_counts_clean)[4] <- "count"
 ward_counts_clean <- aggregate(id ~ LGA  + Ward , data = cbhmis_clean, FUN = length)  ## number of duplicate ward/month
 names(ward_counts_clean)[3] <- "count" 
 hist(ward_counts_clean$count) ## shouldn't have more than 18 obs per ward given the months we've included
-write.csv(ward_counts_clean,paste0(outdir,"data checks/num_obs_per_ward.csv"),row.names = F)
+write.csv(ward_counts_clean,paste0("data checks/num_obs_per_ward.csv"),row.names = F)
 
 # some manual cleaning -- total number of CVs and rep CVs clearly getting enetered in one cell here
 cbhmis_clean$Total.number.of.CVs.in.the.ward <- ifelse(cbhmis_clean$Total.number.of.CVs.in.the.ward>1000, 
@@ -102,7 +102,7 @@ names(cbhmis_clean) <- c("LGA", "Ward","time","totalCVs","repCVs",
 
 #### A: Spatial data for adjacency matrix in model #### 
 #Nigeria shape file from GADM
-nga_shp <- st_read("/raw data/gadm41_NGA_shp/gadm41_NGA_2.shp")
+nga_shp <- st_read("raw data/gadm41_NGA_shp/gadm41_NGA_2.shp")
 kdn_shp <- nga_shp[nga_shp$NAME_1=="Kaduna",]
 kdn_shp$NAME_2 <- gsub(pattern = " ",replacement = "_", kdn_shp$NAME_2)
 kdn_shp$NAME_2 <- gsub(pattern = "'",replacement = "", kdn_shp$NAME_2)
@@ -116,7 +116,7 @@ adj_matrix <- nb2mat(nb, style = "B", zero.policy = TRUE)
 id_col <- kdn_shp$admin2Name
 rownames(adj_matrix) <- id_col
 colnames(adj_matrix) <- id_col
-write.csv(adj_matrix,paste0(outdir,"/adj_mat.csv"))
+#write.csv(adj_matrix,paste0(outdir,"/adj_mat.csv"))
 
 
 #### B: Analysis of Under-reporting ####
@@ -153,13 +153,13 @@ p.RR <- ggplot(cbhmis_lga, aes(x = time, y = repRate)) +
     legend.text = element_text(size = 12),     # Legend text (if present)
     legend.title = element_text(size = 14)     # Legend title (if present)
   )
-png(filename = paste0(outdir,"/plots/repRateMonthly.png"),height=800,width=1400)
+png(filename = paste0("data checks/plots/repRateMonthly.png"),height=800,width=1400)
 p.RR
 dev.off()
 
 cbhmis_lga_rep <- cbhmis_lga[,names(cbhmis_lga) %in% c("LGA","repRate")] %>% 
   group_by(LGA) %>% summarise(across(everything(), mean)) %>%
-  rename("avgRegRate"="repRate")
+  dplyr::rename("avgRegRate"="repRate")
   
 
 repRate <- left_join(kdn_shp,cbhmis_lga_rep,by=c("NAME_2"="LGA"))
@@ -170,10 +170,10 @@ pRRmap <- ggplot(repRate) +
   theme_void() +
   labs(fill = "Average reporting rate",
        title = "Reporting Rate for LGA averaged over monthly rates")
-png(filename = paste0(outdir,"/plots/repRateMap.png"),height=900,width=1200)
+png(filename = "data checks/plots/repRateMap.png",height=900,width=1200)
 pRRmap
 dev.off()
-
+##### NEEDS FOLLOW-UP: Need to correct total number of CVs after getting confimration from Faruk
 
 ####  C: Checking CBHMIS Referrral and MMR data      ####
 ##### C1: Cleaning referral data for under-reporting #####
@@ -216,7 +216,7 @@ scat.plots <- map(referral_vars, function(var) {
 })
 ref_plot <- wrap_plots(scat.plots, ncol = 3, guides = "collect") &
   theme(legend.position = "bottom")
-png(filename = paste0(outdir,"/plots/referralplots.png"),height=900,width=1200)
+png(filename = paste0("data checks/plots/referralplots.png"),height=900,width=1200)
 ref_plot
 dev.off()
 
@@ -241,7 +241,7 @@ pANC <- ggplot(cbhmis_lga) +
           geom_hline(data=outlier, aes(yintercept=anc_max, color = "Max ANC")) + 
          theme_bw() + xlim(c(0,100)) +   
          scale_color_manual(values = c("3 SD Threshold" = "blue", "Max ANC" = "green"),name="Outlier Rule") 
-png(filename = paste0(outdir,"/plots/ANC_ref_outlier.png"),height=900,width=1200)
+png(filename = paste0("data checks/plots/ANC_ref_outlier.png"),height=900,width=1200)
 pANC
 dev.off()
 
@@ -254,13 +254,30 @@ cbhmis_lga <- dplyr::left_join(cbhmis_lga,outlier,by=c("LGA"))
 ## surpress those LGA obs where the obs are above threshold
 cbhmis_lga$ANC_ref <- ifelse(cbhmis_lga$ANC_ref > cbhmis_lga$anc_max,NA,cbhmis_lga$ANC_ref)
 
-pANC_remove <- ggplot(cbhmis_lga,aes(x = repRate, y = ANC_ref)) + 
+##   UPDATE 7/2/25: Based on conversations with the team, we're going to not exclude but keep use the median value for the LGA to impute referral rates
+cbhmis_lga <- cbhmis_lga %>%
+  group_by(LGA) %>%
+  mutate(
+    ANC_ref = ifelse(is.na(ANC_ref), median(ANC_ref, na.rm = TRUE), ANC_ref),
+  ) %>%
+  ungroup()
+
+pANC_remove <- ggplot(cbhmis_lga) + 
+  facet_wrap(~LGA,scales = 'free_y') + 
+  geom_point(aes(x = repRate, y = ANC_ref)) + 
+  geom_hline(data=outlier, aes(yintercept=threeSD, color = "3 SD Threshold")) + 
+  geom_hline(data=outlier, aes(yintercept=anc_max, color = "Max ANC")) + 
+  theme_bw() + xlim(c(0,100)) +   
+  scale_color_manual(values = c("3 SD Threshold" = "blue", "Max ANC" = "green"),name="Outlier Rule") 
+
+pANC_remove_corr <- ggplot(cbhmis_lga,aes(x = repRate, y = ANC_ref)) + 
   geom_point(aes(color = LGA)) + 
   scale_color_manual(values = palette23) +
   geom_smooth(method = "loess", se = FALSE, color = "black",linetype = "dashed") + 
   theme_bw() + xlim(c(50,100)) 
-png(filename = paste0(outdir,"/plots/ANC_ref_remove.png"),height=900,width=1200)
-pANC_remove
+
+png(filename = paste0("data checks/plots/ANC_ref_remove.png"),height=900,width=1200)
+pANC_remove_corr
 dev.off()
 
 ### NEEDS FOLLOW_UP: This is not a super strong relationship, so perhaps we need to look at FP -- for now use this one
@@ -288,7 +305,7 @@ pLB <- ggplot(data=cbhmis_lga,aes(x=time,y=lb)) + facet_wrap(~LGA) + ylab("Live 
 
 MMR_line <- pMD + pLB + plot_layout(ncol = 2)
 
-png(filename = paste0(outdir,"/plots/MMR_line.png"),height=900,width=1200)
+png(filename = paste0("data checks/plots/MMR_line.png"),height=900,width=1200)
 MMR_line
 dev.off()
 
@@ -318,7 +335,7 @@ pMMRmap <- ggplot(kdn_shp) +
   labs(fill = "MMR (per 100k LB)",
        title = "MMR for period of Oct '23-Mar '25")
 
-png(filename = paste0(outdir,"/plots/MMR_map.png"),height=1000,width=1200)
+png(filename = paste0("data checks/plots/MMR_map.png"),height=1000,width=1200)
 pMMRmap
 dev.off()
 
@@ -331,7 +348,7 @@ pANCrefmap <- ggplot(kdn_shp) +
   labs(fill = "ANC referrals (per 1000 WRA)",
        title = "Average ANC referrals over Oct '23-Mar '25 period")
 
-png(filename = paste0(outdir,"/plots/ANCref_map.png"),height=1000,width=1200)
+png(filename = paste0("data checks/plots/ANCref_map.png"),height=1000,width=1200)
 pANCrefmap
 dev.off()
 
@@ -343,10 +360,11 @@ educ$LGA <- ifelse(educ$LGA=="MAKARFI","Makarfi",educ$LGA)
 educ$LGA <- ifelse(educ$LGA=="ZANGON_KATAF","Zangon_Kataf",educ$LGA)
 
 educ$LGA <- gsub(pattern = "_",replacement = " ",x = educ$LGA)
-educ <- educ %>% select(LGA,ever_school,second.plus) %>%
-         mutate(ever_school=100*ever_school,
+educ <- educ %>% select(LGA,anyEd,second.plus,higher) %>%
+         mutate(ever_school=100*anyEd,
                 second.plus=100*second.plus,
-                LGA = str_to_title(LGA, locale = "en"))
+                higherEd =100*higher,
+                LGA = str_to_title(LGA, locale = "en")) %>% select(-higher)
 educ$LGA <- gsub(pattern = " ",replacement = "_",x = educ$LGA)
 kdn_shp <- left_join(kdn_shp,educ,by=c("NAME_2"="LGA"))
 
@@ -369,8 +387,16 @@ pSecondmap <- ggplot(kdn_shp) +
   labs(fill = "Proportion",
        title = "Women who attended secondary or higher")
 
-educ_map <- pAnyEdmap + pSecondmap + plot_layout(ncol = 2)
-png(filename = paste0(outdir,"/plots/educ_map.png"),height=900,width=1200)
+pHigherdmap <- ggplot(kdn_shp) +
+  geom_sf(aes(fill = higherEd )) +
+  scale_fill_viridis_c() +
+  geom_sf_text(aes(label = NAME_2 ), size = 4, check_overlap = TRUE,color="white",fontface ="bold") +
+  theme_void() +
+  labs(fill = "Proportion",
+       title = "Women who attended higher than secondary")
+
+educ_map <- pAnyEdmap + pSecondmap + pHigherdmap + plot_layout(ncol = 2)
+png(filename = paste0("data checks/plots/educ_map.png"),height=900,width=1200)
 educ_map
 dev.off()
 
@@ -386,6 +412,7 @@ kaduna_vect <- vect(kdn_shp)
 # travel time to health facility by motor
 tt_raster <- rast("raw data/travel time/202001_Global_Motorized_Travel_Time_to_Healthcare_NGA.tiff")
 kdn_shp$tt_mean_unweighted <- exact_extract(tt_raster, kdn_shp, 'mean')
+kdn_shp$tt_median_unweighted <- exact_extract(tt_raster, kdn_shp, 'mean')
 
 ### NEEDS FOLLOW_UP: NEED TO FIGURE OUT HOW TO COMPUTE THE WEIGHTED TRAVEL TIME GIVEN THE SPARSITY OF POPULATION DATA
 
@@ -428,11 +455,22 @@ pTTmap <- ggplot(kdn_shp) +
   geom_sf_text(aes(label = NAME_2 ), size = 4, check_overlap = TRUE,color="white",fontface ="bold") +
   theme_void() +
   labs(fill = "Travel Time (min)",
-       title = "Unweighted travel time to nearest facility")
-png(filename = paste0(outdir,"/plots/traveltime_map.png"),height=900,width=1200)
+       title = "Unweighted mean travel time to nearest facility")
+
+
+pTTMedmap <- ggplot(kdn_shp) +
+  geom_sf(aes(fill = tt_median_unweighted )) +
+  scale_fill_viridis_c() +
+  geom_sf_text(aes(label = NAME_2 ), size = 4, check_overlap = TRUE,color="white",fontface ="bold") +
+  theme_void() +
+  labs(fill = "Travel Time (min)",
+       title = "Unweighted median travel time to nearest facility")
+
+pTTmap <- pTTmap+ pTTMedmap
+  
+png(filename = paste0("data checks/plots/traveltime_map.png"),height=900,width=1200)
 pTTmap
 dev.off()
-
 
 
 ##### D3: ANC volumes #####
@@ -481,7 +519,7 @@ pANCvis <- ggplot(anc_long, aes(x = date, y = value, color = visit_type)) +
                 axis.text.x = element_text(angle = 45, hjust = 1),
                 legend.position = "bottom"
               )
-png(filename = paste0(outdir,"/plots/ANCvol_map.png"),height=900,width=1200)
+png(filename = paste0("data checks/plots/ANCvol_map.png"),height=900,width=1200)
 pANCvis
 dev.off()
 
@@ -503,8 +541,52 @@ ancAvg <- ancAvg %>% select(LGA,visit_type,val_std) %>% spread(visit_type, val_s
 
 
 #### E: Putting all together in one dataset for modeling input ####
-pred1 <- st_drop_geometry(kdn_shp[,c("NAME_2","ever_school","second.plus","tt_mean_unweighted")])
+pred1 <- st_drop_geometry(kdn_shp[,c("NAME_2","anyEd","second.plus","higherEd","tt_mean_unweighted","tt_median_unweighted")])
 cbhmis_final <- left_join(cbhmis_agg,pred1,by=c("LGA"="NAME_2"))
 cbhmis_final <- left_join(cbhmis_final,ancAvg,by=c("LGA"))
 
-write.csv(cbhmis_final,"cbhmis_data_for_model.csv",row.names = F)                           
+write.csv(cbhmis_final,"cbhmis_data_for_model.csv",row.names = F)        
+
+
+
+#### F: Some correlation plot checking at LGA level ####
+pRepvANC_ref <- ggplot(cbhmis_final,aes(x=ANC_ref,y=repRate)) + geom_point() +
+                 geom_smooth(method="lm",linetype="dotted") + theme_bw() +
+                  geom_text_repel(aes(label = LGA)) + ggtitle("ANC Referrals (CBHMIS) vs Reporting Rate") 
+  
+pMMRvANC1 <- ggplot(cbhmis_final,aes(x=ANC.1st,y=MMR)) + geom_point() +
+  geom_smooth(method="lm",linetype="dotted") + theme_bw() +
+  geom_text_repel(aes(label = LGA)) + ggtitle("Average volume of ANC1 visits (HMIS) vs MMR") 
+
+pMMRvANC4 <- ggplot(cbhmis_final,aes(x=ANC.4th,y=MMR)) + geom_point() +
+  geom_smooth(method="lm",linetype="dotted") + theme_bw() +
+  geom_text_repel(aes(label = LGA)) + ggtitle("Average volume of ANC4 visits (HMIS) scaled by WRA vs MMR") 
+
+pMMRvANC8 <- ggplot(cbhmis_final,aes(x=ANC.8th,y=MMR)) + geom_point() +
+  geom_smooth(method="lm",linetype="dotted") + theme_bw() +
+  geom_text_repel(aes(label = LGA)) + ggtitle("Average volume of ANC8 visits (HMIS) scaled by WRA vs MMR") 
+
+pMMRvEduc1 <- ggplot(cbhmis_final,aes(x=anyEd,y=MMR)) + geom_point() +
+  geom_smooth(method="lm",linetype="dotted") + theme_bw() +
+  geom_text_repel(aes(label = LGA)) + ggtitle("Proportion of women with any education (KDHS) vs MMR") 
+
+pMMRvEduc2 <- ggplot(cbhmis_final,aes(x=second.plus,y=MMR)) + geom_point() +
+  geom_smooth(method="lm",linetype="dotted") + theme_bw() +
+  geom_text_repel(aes(label = LGA)) + ggtitle("Proportion of women with secondary or higher educ (KDHS)  vs MMR") 
+
+pMMRvEduc3 <- ggplot(cbhmis_final,aes(x=higherEd,y=MMR)) + geom_point() +
+  geom_smooth(method="lm",linetype="dotted") + theme_bw() +
+  geom_text_repel(aes(label = LGA)) + ggtitle("Proportion of women with higher than secondary educ (KDHS)  vs MMR") 
+
+pMMRvTTmean <- ggplot(cbhmis_final,aes(x=tt_mean_unweighted ,y=MMR)) + geom_point() +
+  geom_smooth(method="lm",linetype="dotted") + theme_bw() +
+  geom_text_repel(aes(label = LGA)) +ggtitle("Unweighted average travel time to health facility by motor (MAP)") 
+
+
+ 
+pPred <- pRepvANC_ref + pMMRvANC1 + pMMRvANC4 + pMMRvANC8 + pMMRvEduc1 + pMMRvEduc2 + pMMRvEduc3 + pMMRvTTmean + plot_layout(ncol = 3)
+
+png(filename = paste0("data checks/plots/pred_corr.png"),height=1600,width=2000)
+pPred
+dev.off()
+

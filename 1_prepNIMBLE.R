@@ -8,6 +8,7 @@
 #################################################################
 library(sf)
 library(spdep)
+library(ggrepel)
 
 rm(list=ls())
 set.seed(105)
@@ -16,22 +17,41 @@ outdir <- "C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/G
 
 
 #### 1: Read in data ####
-modDate <- read.csv("cbhmis_data_for_model.csv")
+modData <- read.csv("cbhmis_data_for_model.csv")
 
 ## define Outcome and offset
 # ------------------------
-z <- modDate$deaths
-live_births <- modDate$lb
+z <- modData$deaths
+live_births <- modData$lb
 N <- length(z)  # number of LGAs
 
 
 #### 2: Center and covariates  ####
-incidence_covars <- scale(modDate[, c("ever_school", "tt_mean_unweighted", "ANC.4th")],
+incidence_covars <- scale(modData[, c("anyEd", "tt_mean_unweighted", "ANC.1st")],
                           center = TRUE, scale = FALSE)
+ggplot(modData, aes(x = anyEd, y = incidence_covars[,1], label = LGA)) +
+  geom_point() +
+  geom_text_repel(size = 3) +
+  theme_minimal()
+
+ggplot(modData, aes(x = tt_mean_unweighted, y = incidence_covars[,2], label = LGA)) +
+  geom_point() +
+  geom_text_repel(size = 3) +
+  theme_minimal()
+
+ggplot(modData, aes(x = ANC.1st, y = incidence_covars[,3], label = LGA)) +
+  geom_point() +
+  geom_text_repel(size = 3) +
+  theme_minimal()
+
 
 # Reporting model covariate: center
-reporting_covars <- scale(modDate[, "ANC_ref_scaled", drop = FALSE],
+reporting_covars <- scale(modData[, "ANC_ref_scaled"],
                           center = TRUE, scale = FALSE)
+ggplot(modData, aes(x = ANC_ref_scaled, y = reporting_covars[,1], label = LGA)) +
+  geom_point() +
+  geom_text_repel(size = 3) +
+  theme_minimal()
 
 #### 3: Create spatial inputs  ####
 nga_shp <- st_read("raw data/gadm41_NGA_shp/gadm41_NGA_2.shp")
