@@ -28,7 +28,7 @@ N <- length(z)  # number of LGAs
 
 #### 2: Center and covariates  ####
 incidence_covars <- scale(modData[, c("anyEd", "tt_mean_unweighted", "ANC.1st")],
-                          center = TRUE, scale = FALSE)
+                          center = TRUE, scale = TRUE)
 ggplot(modData, aes(x = anyEd, y = incidence_covars[,1], label = LGA)) +
   geom_point() +
   geom_text_repel(size = 3) +
@@ -47,7 +47,7 @@ ggplot(modData, aes(x = ANC.1st, y = incidence_covars[,3], label = LGA)) +
 
 # Reporting model covariate: center
 reporting_covars <- scale(modData[, "ANC_ref_scaled"],
-                          center = TRUE, scale = FALSE)
+                          center = TRUE, scale = TRUE)
 ggplot(modData, aes(x = ANC_ref_scaled, y = reporting_covars[,1], label = LGA)) +
   geom_point() +
   geom_text_repel(size = 3) +
@@ -84,7 +84,7 @@ nimble_data <- list(
   z = z,
   educ = incidence_covars[, 1],
   travel = incidence_covars[, 2],
-  anc4 = incidence_covars[, 3],
+  anc = incidence_covars[, 3],
   ancRef = reporting_covars[, 1],
   live_births = live_births
 )

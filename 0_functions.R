@@ -38,8 +38,8 @@ plot_prior_vs_posterior <- function(samples,param_name, prior_defs) {
   
   # x range for prior
   x_range <- switch(prior_type,
-                          "norm" = seq(-50,50,length.out = 1000),
-                          "half-normal" = seq(0,50,length.out = 1000),
+                          "norm" = seq(-10,10,length.out = 1000),
+                          "half-normal" = seq(0,10,length.out = 1000),
                           stop("Unsupported prior type")
   )
   

@@ -21,7 +21,7 @@ library(ggrepel)
 source("~/GitHub/CBHMIS_SAE_MMR/0_functions.R", echo=TRUE)
 setwd("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR")
 
-model_date <- "2025-06-30"
+model_date <- "2025-07-02_no_ANCRef"
 model_output <- paste0("model_out_",model_date,".rds")  ## which version of the model you want to read in
 model_out_dir <- paste0("model runs/model_",model_date,"/")
 
@@ -74,15 +74,15 @@ param_names <- c('a[1]', 'a[2]', 'a[3]', 'a[4]',
                  'b[1]', 'b[2]', 'epsilon', 'sigma', 'nu')
 
 prior_defs <- list(
-  "a[1]" = list(type = "norm", mean = 0, sd = 10),
-  "a[2]" = list(type = "norm", mean = 0, sd = 10),
-  "a[3]" = list(type = "norm", mean = 0, sd = 10),
-  "a[4]" = list(type = "norm", mean = 0, sd = 10),
+  "a[1]" = list(type = "norm", mean = log(0.01), sd = 0.5),
+  "a[2]" = list(type = "norm", mean = 0, sd = 1),
+  "a[3]" = list(type = "norm", mean = 0, sd = 1),
+  "a[4]" = list(type = "norm", mean = 0, sd = 1),
   "b[1]" = list(type = "norm", mean = 2, sd = 0.6),
-  "b[2]" = list(type = "norm", mean = 0, sd = 10),
+  "b[2]" = list(type = "norm", mean = 0, sd = 1),
   "epsilon" = list(type = "half-normal", mean = 0, sd = 1),  # tighter prior, often used in under-reporting
-  "sigma" = list(type = "half-normal", mean = 0, sd = 1),
-  "nu" = list(type = "half-normal", mean = 0, sd = 1)
+  "sigma" = list(type = "half-normal", mean = 0, sd = 0.3),
+  "nu" = list(type = "half-normal", mean = 0, sd = 2)
 )
 
 plot_list <- lapply(param_names, function(param) {
@@ -211,10 +211,10 @@ summary_df$LGA <- LGA_names
 write.csv(summary_df,file = paste0(model_out_dir,"/summary_stats.csv"),row.names = F)
 
 # a full dataset that can be used to compare observed vs output vs covariates etc.
-combined_df <- left_join(summary_df,data[,c("LGA","repRate","ANC_ref","lb","deaths","MMR","ever_school",
-                                           "tt_mean_unweighted","ANC.4th")])
+combined_df <- left_join(summary_df,data[,c("LGA","repRate","ANC_ref","lb","deaths","MMR","anyEd",
+                                           "tt_mean_unweighted","ANC.1st")])
 combined_df$ANC_ref_scaled <- nimble_data$ancRef
-combined_df$ANC_4_scaled <- nimble_data$anc4
+combined_df$ANC_4_scaled <- nimble_data$anc
 combined_df$tt_scaled <- nimble_data$travel
 combined_df$educ_scaled <- nimble_data$educ
 
@@ -445,7 +445,7 @@ pTauPost <- ggplot(data.frame(tau = tau_samples), aes(x = tau)) +
                      x = "τ", y = "Density") +
                 theme_minimal()
 png(filename = paste0(model_out_dir,"/plots/tau_post.png"),height=900,width=1200)
-pThetaPOst
+pTauPost
 dev.off()
 
 
