@@ -53,7 +53,7 @@ post_mat_orig <- as.matrix(samples_orig)
 
 
 ##### 
-pi_names <- grep("^pi\\[[0-9]+\\]$", colnames(mat_with), value = TRUE)
+pi_names <- grep("^pi\\[[0-9]+\\]$", colnames(post_mat), value = TRUE)
 
 pi_with <- colMeans(post_mat_orig[, pi_names])
 pi_without <- colMeans(post_mat[, pi_names])
@@ -74,11 +74,13 @@ ggplot(pi_df, aes(x = reorder(LGA, delta), y = delta)) +
 
 ### correlations between the coviarates
 cor_df <- covariate_data %>%
-  select(ancRef, educ, travel, anc, mmr) %>%
+  select(ancRef, educ, travel, anc) %>%
   cor()
 
 
 corrplot(cor_df, method = "color", addCoef.col = "black", number.cex = 0.8)
+
+
 ggplot(mapping = aes(x=scale(data$ANC_ref_scaled,center = TRUE,scale = TRUE),y=data$MMR)) + geom_point() + geom_smooth(method="lm")
 
        
