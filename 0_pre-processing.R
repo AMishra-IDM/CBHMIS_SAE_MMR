@@ -18,6 +18,7 @@ library(lubridate)
 library(exactextractr)
 library(Polychrome)
 library(ggrepel)
+library(RColorBrewer)
 
 set.seed(105)
 
@@ -120,64 +121,83 @@ colnames(adj_matrix) <- id_col
 
 
 #### B: Analysis of Under-reporting ####
-## Ward-level reporting rates over time
-cbhmis_clean$repRate <- cbhmis_clean$repCVs/cbhmis_clean$totalCVs
-#table(cbhmis_clean$repRate,exclude = NULL)
+## Note/Update 7/28: The total CV data seemed wrong, so we got corrected data from 
+## Faruk but it's only at the LGA level and over the whole period so will use that instead
 
-cbhmis_clean <- cbhmis_clean %>% group_by(LGA) %>%
-  mutate(Ward_color_group = as.factor((as.numeric(factor(Ward)) - 1) %% 10 + 1))
-
-p1 <- ggplot(cbhmis_clean,aes(x=time,y=repRate,group=Ward,color=Ward_color_group)) + facet_wrap(~LGA) + 
-    geom_point() + geom_line() + theme_bw() +   theme(legend.position = "none")
-p1
-
+# ## Ward-level reporting rates over time
+# cbhmis_clean$repRate <- cbhmis_clean$repCVs/cbhmis_clean$totalCVs
+# #table(cbhmis_clean$repRate,exclude = NULL)
+# 
+# cbhmis_clean <- cbhmis_clean %>% group_by(LGA) %>%
+#   mutate(Ward_color_group = as.factor((as.numeric(factor(Ward)) - 1) %% 10 + 1))
+# 
+# p1 <- ggplot(cbhmis_clean,aes(x=time,y=repRate,group=Ward,color=Ward_color_group)) + facet_wrap(~LGA) + 
+#     geom_point() + geom_line() + theme_bw() +   theme(legend.position = "none")
+# p1
+# 
 
 ## aggregating to LGA level
 cbhmis_lga <- cbhmis_clean[,!names(cbhmis_clean) %in% c("Ward","repRate","Ward_color_group","sub_time")] %>% 
                   group_by(time, LGA) %>% summarise(across(everything(), sum))
 
-cbhmis_lga$repRate <- 100*cbhmis_lga$repCVs/cbhmis_lga$totalCVs
-p.RR <- ggplot(cbhmis_lga, aes(x = time, y = repRate)) +
-  geom_line() +
-  geom_point() +
-  facet_wrap(~LGA) +
-  ylab("Reporting Rate") +
-  scale_x_date(date_labels = "%b %y") +
-  theme_bw() +
-  ylim(0, 100) +
-  theme(
-    strip.text = element_text(size = 14),      # Facet labels
-    axis.title = element_text(size = 14),      # Axis labels
-    axis.text = element_text(size = 12),       # Tick labels
-    plot.title = element_text(size = 16),      # Title (if you add one)
-    legend.text = element_text(size = 12),     # Legend text (if present)
-    legend.title = element_text(size = 14)     # Legend title (if present)
-  )
-png(filename = paste0("data checks/plots/repRateMonthly.png"),height=800,width=1400)
-p.RR
-dev.off()
+## THIS IS ALL MONTHLY DATA SO NO LONGER USING 
+# cbhmis_lga$repRate <- 100*cbhmis_lga$repCVs/cbhmis_lga$totalCVs
+# p.RR <- ggplot(cbhmis_lga, aes(x = time, y = repRate)) +
+#   geom_line() +
+#   geom_point() +
+#   facet_wrap(~LGA) +
+#   ylab("Reporting Rate") +
+#   scale_x_date(date_labels = "%b %y") +
+#   theme_bw() +
+#   ylim(0, 100) +
+#   theme(
+#     strip.text = element_text(size = 14),      # Facet labels
+#     axis.title = element_text(size = 14),      # Axis labels
+#     axis.text = element_text(size = 12),       # Tick labels
+#     plot.title = element_text(size = 16),      # Title (if you add one)
+#     legend.text = element_text(size = 12),     # Legend text (if present)
+#     legend.title = element_text(size = 14)     # Legend title (if present)
+#   )
+# png(filename = paste0("data checks/plots/repRateMonthly.png"),height=800,width=1400)
+# p.RR
+# dev.off()
 
-cbhmis_lga_rep <- cbhmis_lga[,names(cbhmis_lga) %in% c("LGA","repRate")] %>% 
-  group_by(LGA) %>% summarise(across(everything(), mean)) %>%
-  dplyr::rename("avgRegRate"="repRate")
+# cbhmis_lga_rep <- cbhmis_lga[,names(cbhmis_lga) %in% c("LGA","repRate")] %>%
+#   group_by(LGA) %>% summarise(across(everything(), mean)) %>%
+#   dplyr::rename("avgRepRate"="repRate")
   
+
+#reading in total CVs in LGA expected each month
+lga_total_cv <- readxl::read_xlsx("raw data/Kaduna State Community Volunteers List_V3.xlsx",sheet = 1)
+names(lga_total_cv) <- c("LGA","total_CVs")
+lga_total_cv <- lga_total_cv[lga_total_cv$LGA!="Grand Total",]
+lga_total_cv$LGA <- gsub(pattern = " ",replacement = "_",lga_total_cv$LGA)
+lga_total_cv$LGA <- ifelse(lga_total_cv$LGA=="Jema'a","Jemaa",lga_total_cv$LGA)
+lga_total_cv$LGA <- ifelse(lga_total_cv$LGA=="Zango_Kataf","Zangon_Kataf",lga_total_cv$LGA)
+
+
+cbhmis_lga_rep <- cbhmis_lga[,names(cbhmis_lga) %in% c("LGA","repCVs")] %>%
+  group_by(LGA) %>% summarise(across(everything(), mean)) %>%
+  dplyr::rename("avgRepCVS"="repCVs") %>% left_join(lga_total_cv,by="LGA")
+cbhmis_lga_rep$avgRepCVS <- floor(cbhmis_lga_rep$avgRepCVS)
+cbhmis_lga_rep$avgRepRate <- cbhmis_lga_rep$avgRepCVS/cbhmis_lga_rep$total_CVs
 
 repRate <- left_join(kdn_shp,cbhmis_lga_rep,by=c("NAME_2"="LGA"))
 pRRmap <- ggplot(repRate) +
-  geom_sf(aes(fill = avgRegRate)) +
+  geom_sf(aes(fill = avgRepRate)) +
   scale_fill_viridis_c() +
   geom_sf_text(aes(label = NAME_2 ), size = 4, check_overlap = TRUE,color="white",fontface ="bold") +
   theme_void() +
   labs(fill = "Average reporting rate",
-       title = "Reporting Rate for LGA averaged over monthly rates")
-png(filename = "data checks/plots/repRateMap.png",height=900,width=1200)
+       title = "Reporting Rate for LGA Corrected")
+png(filename = "data checks/plots/repRateMap_updated.png",height=900,width=1200)
 pRRmap
 dev.off()
-##### NEEDS FOLLOW-UP: Need to correct total number of CVs after getting confimration from Faruk
+
+
 
 ####  C: Checking CBHMIS Referrral and MMR data      ####
 ##### C1: Cleaning referral data for under-reporting #####
-## cleaning will happen on the monthly level rather than aggregate level
 
 referral_vars <- c("ANC_ref","FP_ref","LD_ref","PNC_ref","PPFP_ref","Imm_ref","Nut_ref","ICMI_ref")
 
@@ -198,26 +218,22 @@ pop_dat <- boundary %>%
 palette23 <- createPalette(23, seedcolors = c("#000000"))
 names(palette23) <- unique(cbhmis_lga$LGA)  # Named vector for manual scale
 
+
+## Plot of all referral variables
 scat.plots <- map(referral_vars, function(var) {
-  ggplot(cbhmis_lga, aes(x = repRate, y = .data[[var]])) +
-    geom_point(aes(color = LGA)) +
-    geom_smooth(
-      method = "loess",
-      se = FALSE,
-      color = "black",
-      linetype = "dashed") +
-    scale_color_manual(values = palette23) +
+    ggplot(cbhmis_lga, aes(x = time, y = .data[[var]])) +
+    facet_wrap(~LGA) + 
+    scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
+    geom_col() + 
     theme_minimal() +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1)) +
     labs(
       title = paste(var),
-      x = "Reporting Rate",
       y = "Num. Referrals"
     )
 })
-ref_plot <- wrap_plots(scat.plots, ncol = 3, guides = "collect") &
-  theme(legend.position = "bottom")
-png(filename = paste0("data checks/plots/referralplots.png"),height=900,width=1200)
-ref_plot
+pdf(file  = paste0("data checks/plots/referralplots.pdf"),height=8,width=12)
+scat.plots
 dev.off()
 
 ## We will use ANC referral rates as our proxy of under-reporing. Code from here on
@@ -227,7 +243,8 @@ dev.off()
 ## (2)assuming 5% of women of WRA are pregnant and 70% are attending ANC (gives an upper bound)
 outlier.sd <-  cbhmis_lga %>%
   group_by(LGA)  %>%
-  summarise(threeSD = 3*sd(ANC_ref) + mean(ANC_ref, na.rm=T))
+  summarise(ANC_threeSD = 3*sd(ANC_ref) + mean(ANC_ref, na.rm=T),
+            FP_threeSD = 3*sd(FP_ref) + mean(FP_ref, na.rm=T))
 
 outlier.wra <- pop_dat
 outlier.wra$preg_women <- outlier.wra$wra_pop*0.05
@@ -236,13 +253,30 @@ outlier <- left_join(outlier.sd,outlier.wra,by=c("LGA"="NAME_2"))
 
 pANC <- ggplot(cbhmis_lga) + 
          facet_wrap(~LGA,scales = 'free_y') + 
-          geom_point(aes(x = repRate, y = ANC_ref)) + 
-          geom_hline(data=outlier, aes(yintercept=threeSD, color = "3 SD Threshold")) + 
+         scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
+         geom_col(aes(x=time, y = ANC_ref)) + 
+          geom_hline(data=outlier, aes(yintercept=ANC_threeSD, color = "3 SD Threshold")) + 
           geom_hline(data=outlier, aes(yintercept=anc_max, color = "Max ANC")) + 
-         theme_bw() + xlim(c(0,100)) +   
-         scale_color_manual(values = c("3 SD Threshold" = "blue", "Max ANC" = "green"),name="Outlier Rule") 
+         theme_bw() + 
+         scale_color_manual(values = c("3 SD Threshold" = "blue", "Max ANC" = "green"),name="Outlier Rule")  +
+         theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1))
+
 png(filename = paste0("data checks/plots/ANC_ref_outlier.png"),height=900,width=1200)
 pANC
+dev.off()
+
+
+pFP <- ggplot(cbhmis_lga) + 
+  facet_wrap(~LGA,scales = 'free_y') + 
+  scale_x_date(date_breaks = "1 month", date_labels = "%Y-%m") +
+  geom_col(aes(x=time, y = FP_ref)) + 
+  geom_hline(data=outlier, aes(yintercept=FP_threeSD, color = "3 SD Threshold")) + 
+  theme_bw() + 
+  scale_color_manual(values = c("3 SD Threshold" = "blue"),name="Outlier Rule")  +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1))
+
+png(filename = paste0("data checks/plots/FP_ref_outlier.png"),height=900,width=1200)
+pFP
 dev.off()
 
 ### There is not a best rule, 3SD looks generally less conservative, but the maximum logical
@@ -262,23 +296,23 @@ cbhmis_lga <- cbhmis_lga %>%
   ) %>%
   ungroup()
 
-pANC_remove <- ggplot(cbhmis_lga) + 
-  facet_wrap(~LGA,scales = 'free_y') + 
-  geom_point(aes(x = repRate, y = ANC_ref)) + 
-  geom_hline(data=outlier, aes(yintercept=threeSD, color = "3 SD Threshold")) + 
-  geom_hline(data=outlier, aes(yintercept=anc_max, color = "Max ANC")) + 
-  theme_bw() + xlim(c(0,100)) +   
-  scale_color_manual(values = c("3 SD Threshold" = "blue", "Max ANC" = "green"),name="Outlier Rule") 
-
-pANC_remove_corr <- ggplot(cbhmis_lga,aes(x = repRate, y = ANC_ref)) + 
-  geom_point(aes(color = LGA)) + 
-  scale_color_manual(values = palette23) +
-  geom_smooth(method = "loess", se = FALSE, color = "black",linetype = "dashed") + 
-  theme_bw() + xlim(c(50,100)) 
-
-png(filename = paste0("data checks/plots/ANC_ref_remove.png"),height=900,width=1200)
-pANC_remove_corr
-dev.off()
+# pANC_remove <- ggplot(cbhmis_lga) + 
+#   facet_wrap(~LGA,scales = 'free_y') + 
+#   geom_point(aes(x = repRate, y = ANC_ref)) + 
+#   geom_hline(data=outlier, aes(yintercept=threeSD, color = "3 SD Threshold")) + 
+#   geom_hline(data=outlier, aes(yintercept=anc_max, color = "Max ANC")) + 
+#   theme_bw() + xlim(c(0,100)) +   
+#   scale_color_manual(values = c("3 SD Threshold" = "blue", "Max ANC" = "green"),name="Outlier Rule") 
+# 
+# pANC_remove_corr <- ggplot(cbhmis_lga,aes(x = repRate, y = ANC_ref)) + 
+#   geom_point(aes(color = LGA)) + 
+#   scale_color_manual(values = palette23) +
+#   geom_smooth(method = "loess", se = FALSE, color = "black",linetype = "dashed") + 
+#   theme_bw() + xlim(c(50,100)) 
+# 
+# png(filename = paste0("data checks/plots/ANC_ref_remove.png"),height=900,width=1200)
+# pANC_remove_corr
+# dev.off()
 
 ### NEEDS FOLLOW_UP: This is not a super strong relationship, so perhaps we need to look at FP -- for now use this one
 
@@ -292,7 +326,8 @@ sd_lines <- cbhmis_lga %>%
 pMD <- ggplot(data=cbhmis_lga) + facet_wrap(~LGA) + ylab("Maternal Deaths") +
         geom_line(aes(x=time,y=deaths)) + geom_point(aes(x=time,y=deaths)) + theme_bw() + 
        geom_hline(data = sd_lines, aes(yintercept = deaths_3sd,color="3 SD"), 
-             linetype = "dashed") #+ scale_color_manual(values = c("3 SD" = "red"),name="Outlier Rule") 
+             linetype = "dashed") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1)) #+ scale_color_manual(values = c("3 SD" = "red"),name="Outlier Rule") 
 
 
 pLB <- ggplot(data=cbhmis_lga,aes(x=time,y=lb)) + facet_wrap(~LGA) + ylab("Live Births") +
@@ -301,11 +336,13 @@ pLB <- ggplot(data=cbhmis_lga,aes(x=time,y=lb)) + facet_wrap(~LGA) + ylab("Live 
              linetype = "dashed") +
   geom_hline(data = sd_lines, aes(yintercept = lb_4sd,color="4 SD"), 
              linetype = "dashed") + 
-    scale_color_manual(values = c("3 SD" = "red","4 SD" = "blue"),name="Outlier Rule") 
+    scale_color_manual(values = c("3 SD" = "red","4 SD" = "blue"),name="Outlier Rule") +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, vjust = 1))
+
 
 MMR_line <- pMD + pLB + plot_layout(ncol = 2)
 
-png(filename = paste0("data checks/plots/MMR_line.png"),height=900,width=1200)
+png(filename = paste0("data checks/plots/MMR_line.png"),height=900,width=1400)
 MMR_line
 dev.off()
 
@@ -314,16 +351,23 @@ dev.off()
 
 ##### C3: Aggregating data across time for final CBHMIS data #####
 cbhmis_agg <- cbhmis_lga %>% 
-  select(LGA,repRate,ANC_ref,lb,deaths,wra_pop) %>%
+  select(LGA,ANC_ref,FP_ref,lb,deaths,wra_pop) %>%
   group_by(LGA) %>% 
-  summarise(repRate = mean(repRate,na.rm=TRUE),
-            ANC_ref = mean(ANC_ref, na.rm=TRUE),
+  summarise(ANC_ref = mean(ANC_ref, na.rm=TRUE),
+            FP_ref = mean(FP_ref, na.rm = TRUE),
             lb = sum(lb,na.rm = T),
             deaths=sum(deaths, na.rm = T),
             wra = max(wra_pop))
+cbhmis_agg <- st_drop_geometry(cbhmis_agg)
 
 cbhmis_agg$ANC_ref_scaled <- 1000*cbhmis_agg$ANC_ref/cbhmis_agg$wra
+cbhmis_agg$FP_ref_scaled <- 1000*cbhmis_agg$FP_ref/cbhmis_agg$wra
 cbhmis_agg$MMR <- 100000*cbhmis_agg$deaths/cbhmis_agg$lb
+
+## Add in new reporting rate
+repRateDat <- st_drop_geometry(repRate[,c("NAME_2","avgRepRate")])
+cbhmis_agg <- left_join(cbhmis_agg,repRate[,c("NAME_2","avgRepRate")],by=c("LGA"="NAME_2"))
+
 kdn_shp <- left_join(kdn_shp,cbhmis_agg,by=c("NAME_2"="LGA"))
 
 
@@ -352,6 +396,17 @@ png(filename = paste0("data checks/plots/ANCref_map.png"),height=1000,width=1200
 pANCrefmap
 dev.off()
 
+pANCrefmap <- ggplot(kdn_shp) +
+  geom_sf(aes(fill = FP_ref_scaled)) +
+  scale_fill_viridis_c() +
+  geom_sf_text(aes(label = NAME_2 ), size = 4, check_overlap = TRUE,color="white",fontface ="bold") +
+  theme_void() +
+  labs(fill = "FP referrals (per 1000 WRA)",
+       title = "Average FP referrals over Oct '23-Mar '25 period")
+
+png(filename = paste0("data checks/plots/ANCref_map.png"),height=1000,width=1200)
+pANCrefmap
+dev.off()
 
 #### D: Pulling in External Predictor data ####
 ##### D1: Education levels from Kaduna HHS #####
@@ -542,18 +597,22 @@ ancAvg <- ancAvg %>% select(LGA,visit_type,val_std) %>% spread(visit_type, val_s
 
 #### E: Putting all together in one dataset for modeling input ####
 pred1 <- st_drop_geometry(kdn_shp[,c("NAME_2","anyEd","second.plus","higherEd","tt_mean_unweighted","tt_median_unweighted")])
-cbhmis_final <- left_join(cbhmis_agg,pred1,by=c("LGA"="NAME_2"))
+cbhmis_agg_final <- st_drop_geometry(cbhmis_agg[,c("LGA","ANC_ref","FP_ref","lb","deaths","wra","ANC_ref_scaled","FP_ref_scaled","MMR","avgRepRate")])
+cbhmis_final <- left_join(cbhmis_agg_final,pred1,by=c("LGA"="NAME_2"))
 cbhmis_final <- left_join(cbhmis_final,ancAvg,by=c("LGA"))
-
 write.csv(cbhmis_final,"cbhmis_data_for_model.csv",row.names = F)        
 
 
 
 #### F: Some correlation plot checking at LGA level ####
-pRepvANC_ref <- ggplot(cbhmis_final,aes(x=ANC_ref,y=repRate)) + geom_point() +
+pRepvANC_ref <- ggplot(cbhmis_final,aes(x=ANC_ref,y=avgRepRate)) + geom_point() +
                  geom_smooth(method="lm",linetype="dotted") + theme_bw() +
                   geom_text_repel(aes(label = LGA)) + ggtitle("ANC Referrals (CBHMIS) vs Reporting Rate") 
   
+pRepvFP_ref <- ggplot(cbhmis_final,aes(x=FP_ref,y=avgRepRate)) + geom_point() +
+  geom_smooth(method="lm",linetype="dotted") + theme_bw() +
+  geom_text_repel(aes(label = LGA)) + ggtitle("FP Referrals (CBHMIS) vs Reporting Rate") 
+
 pMMRvANC1 <- ggplot(cbhmis_final,aes(x=ANC.1st,y=MMR)) + geom_point() +
   geom_smooth(method="lm",linetype="dotted") + theme_bw() +
   geom_text_repel(aes(label = LGA)) + ggtitle("Average volume of ANC1 visits (HMIS) vs MMR") 
@@ -584,9 +643,18 @@ pMMRvTTmean <- ggplot(cbhmis_final,aes(x=tt_mean_unweighted ,y=MMR)) + geom_poin
 
 
  
-pPred <- pRepvANC_ref + pMMRvANC1 + pMMRvANC4 + pMMRvANC8 + pMMRvEduc1 + pMMRvEduc2 + pMMRvEduc3 + pMMRvTTmean + plot_layout(ncol = 3)
+pPred <- pRepvANC_ref + pRepvFP_ref + pMMRvANC1 + pMMRvANC4 + pMMRvANC8 + pMMRvEduc1 + pMMRvEduc2 + pMMRvEduc3 + pMMRvTTmean + plot_layout(ncol = 3)
 
 png(filename = paste0("data checks/plots/pred_corr.png"),height=1600,width=2000)
 pPred
 dev.off()
 
+
+corDat <-cor(cbhmis_final[,c("ANC_ref_scaled","FP_ref_scaled","anyEd","second.plus","higherEd",
+                             "tt_median_unweighted","ANC.1st","ANC.4th","ANC.8th",
+                             "MMR","avgRepRate")])
+
+png(filename = paste0("data checks/plots/pred_corr_heat.png"),height=1600,width=2000)
+corrplot::corrplot(corDat, type="upper", order="hclust",
+                   col=brewer.pal(n=8, name="RdYlBu"),tl.cex=2,cl.cex	=2)
+dev.off()

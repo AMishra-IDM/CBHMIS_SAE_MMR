@@ -74,13 +74,21 @@ ggplot(pi_df, aes(x = reorder(LGA, delta), y = delta)) +
 
 ### correlations between the coviarates
 cor_df <- covariate_data %>%
-  select(ancRef, educ, travel, anc) %>%
+  mutate(MMR=z/live_births*100000)%>%
+  select(ancRef, educ, travel, anc,MMR) %>%
   cor()
 
 
-corrplot(cor_df, method = "color", addCoef.col = "black", number.cex = 0.8)
-
+png(filename = paste0("data checks/plots/predictor_correlation.png"),height=900,width=1200)
+corrplot(cor_df, 
+         method = "color", 
+         addCoef.col = "black", 
+         number.cex = 1.2,   # increase size of correlation coefficient numbers
+         tl.cex = 1.5,       # increase size of text labels (variable names)
+         cl.cex = 1.2)       # increase size of color legend text
+dev.off()
 
 ggplot(mapping = aes(x=scale(data$ANC_ref_scaled,center = TRUE,scale = TRUE),y=data$MMR)) + geom_point() + geom_smooth(method="lm")
+
 
        
