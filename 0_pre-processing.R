@@ -467,7 +467,7 @@ kaduna_vect <- vect(kdn_shp)
 # travel time to health facility by motor
 tt_raster <- rast("raw data/travel time/202001_Global_Motorized_Travel_Time_to_Healthcare_NGA.tiff")
 kdn_shp$tt_mean_unweighted <- exact_extract(tt_raster, kdn_shp, 'mean')
-kdn_shp$tt_median_unweighted <- exact_extract(tt_raster, kdn_shp, 'mean')
+kdn_shp$tt_median_unweighted <- exact_extract(tt_raster, kdn_shp, 'median') 
 
 ### NEEDS FOLLOW_UP: NEED TO FIGURE OUT HOW TO COMPUTE THE WEIGHTED TRAVEL TIME GIVEN THE SPARSITY OF POPULATION DATA
 
