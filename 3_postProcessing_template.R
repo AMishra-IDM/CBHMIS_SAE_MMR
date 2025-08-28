@@ -18,12 +18,12 @@ library(patchwork)
 library(ggrepel)
 
 
-source("~/GitHub/CBHMIS_SAE_MMR/0_functions.R", echo=TRUE)
 setwd("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR")
+source("~/GitHub/CBHMIS_SAE_MMR/0_functions.R", echo=TRUE)
 
-model_date <- "2025-07-02_no_ANCRef"
-model_output <- paste0("model_out_",model_date,".rds")  ## which version of the model you want to read in
-model_out_dir <- paste0("model runs/model_",model_date,"/")
+model_no <- 99 #### CHANGE MODEL RUN HERE
+model_output <- paste0("model_out_",model_no,".rds")  ## which version of the model you want to read in
+model_out_dir <- paste0("model runs/model_",model_no,"/")
 
 #### Loading data ####
 ## model output
@@ -38,7 +38,7 @@ kdn_shp$NAME_2 <- gsub(pattern = "'",replacement = "", kdn_shp$NAME_2)
 
 ## CBHMIS data
 data <- read.csv("cbhmis_data_for_model.csv")
-load("nimble_inputs_final.RData")
+load(paste0(model_out_dir,"/","nimble_inputs_final.RData"))
 LGA_names <- data$LGA
 LGA_names2 <- data.frame("LGA"=1:23,"name"=LGA_names)
 
@@ -50,19 +50,19 @@ LGA_names2 <- data.frame("LGA"=1:23,"name"=LGA_names)
 # traceplots and convergence 
 pdf(file = paste0(model_out_dir,"/trace_plots.pdf"),height=8,width=12)
 traceplot(samples[,c('a[1]','a[2]','a[3]','a[4]',   
-                         'b[1]','b[2]',                  
+                         'b[1]','b[2]',                 
                          'epsilon','sigma','tau','nu',
                          'phi[1]','phi[4]','phi[8]','phi[10]','phi[12]','phi[17]','phi[23]')])    
 dev.off()
 ### Adding a couple of phis because tau looks bad but nu looks ok --> phi's seem to be mixing well
 
 gelman.diag(samples[,c('a[1]','a[2]','a[3]','a[4]',   
-                       'b[1]','b[2]',                  
+                       'b[1]',   'b[2]',                
                        'epsilon','sigma','tau','nu',
                        'phi[1]','phi[4]','phi[8]','phi[10]','phi[12]','phi[17]','phi[23]')])
 
 effectiveSize(samples[,c('a[1]','a[2]','a[3]','a[4]',   
-                         'b[1]','b[2]',                  
+                         'b[1]',  'b[2]',              
                          'epsilon','sigma','tau','nu',
                          'phi[1]','phi[4]','phi[8]','phi[10]','phi[12]','phi[17]','phi[23]')])
 
@@ -71,7 +71,7 @@ effectiveSize(samples[,c('a[1]','a[2]','a[3]','a[4]',
 #### 2: Prior checks ####
 ## prior vs posterior
 param_names <- c('a[1]', 'a[2]', 'a[3]', 'a[4]', 
-                 'b[1]', 'b[2]', 'epsilon', 'sigma', 'nu')
+                 'b[1]','b[2]',   'epsilon', 'sigma', 'nu')
 
 prior_defs <- list(
   "a[1]" = list(type = "norm", mean = log(0.01), sd = 0.5),
@@ -80,7 +80,7 @@ prior_defs <- list(
   "a[4]" = list(type = "norm", mean = 0, sd = 1),
   "b[1]" = list(type = "norm", mean = 2, sd = 0.6),
   "b[2]" = list(type = "norm", mean = 0, sd = 1),
-  "epsilon" = list(type = "half-normal", mean = 0, sd = 1),  # tighter prior, often used in under-reporting
+   "epsilon" = list(type = "half-normal", mean = 0, sd = 1),  # tighter prior, often used in under-reporting
   "sigma" = list(type = "half-normal", mean = 0, sd = 0.3),
   "nu" = list(type = "half-normal", mean = 0, sd = 2)
 )
@@ -94,7 +94,7 @@ print(marrangeGrob(grobs = plot_list, nrow = 2, ncol = 2) )
 dev.off()
 
 
-#### 3: Posterior predictive checks ### 
+#### 3: Posterior predictive checks #### 
 ## checking to see if  my model were true, would I be likely to see data like the data I actually observed
 post_mat <- as.matrix(samples)
 n_draws <- nrow(post_mat) 
@@ -174,7 +174,7 @@ simulated_totals <- rowSums(sim_z)
 p_ppc <- mean(simulated_totals > observed_total)
 print(paste("Posterior Predictive p-value =", round(p_ppc, 3)))
 
-##### 3: Summary Estimates #######
+#### 4: Summary Estimates #####
 samp_matrix <- as.matrix(samples)
 lambda_cols <- grep("^lambda\\[[0-9]+\\]$", colnames(samp_matrix), value = TRUE)
 pi_cols     <- grep("^pi\\[[0-9]+\\]$", colnames(samp_matrix), value = TRUE)
@@ -185,9 +185,9 @@ correction_samples <- 1 / pi_samples
 z_samples <- lambda_samples * pi_samples
 
 # Extract summaries of key outcomes
-y_summary   <- summarize_draws(samp_matrix, "y")
-z_summary   <- summarize_draws(samp_matrix, "z")
-pi_summary  <- summarize_draws(samp_matrix, "pi")
+# y_summary   <- summarize_draws(samp_matrix, "y")
+# z_summary   <- summarize_draws(samp_matrix, "z")
+# pi_summary  <- summarize_draws(samp_matrix, "pi")
 
 # get births in matrix form
 b_i <- nimble_data$live_births
@@ -211,9 +211,9 @@ summary_df$LGA <- LGA_names
 write.csv(summary_df,file = paste0(model_out_dir,"/summary_stats.csv"),row.names = F)
 
 # a full dataset that can be used to compare observed vs output vs covariates etc.
-combined_df <- left_join(summary_df,data[,c("LGA","repRate","ANC_ref","lb","deaths","MMR","anyEd",
+combined_df <- left_join(summary_df,data[,c("LGA","FP_ref_scaled","lb","deaths","MMR","anyEd",
                                            "tt_mean_unweighted","ANC.1st")])
-combined_df$ANC_ref_scaled <- nimble_data$ancRef
+combined_df$FP_scaled <- nimble_data$fp_ref
 combined_df$ANC_4_scaled <- nimble_data$anc
 combined_df$tt_scaled <- nimble_data$travel
 combined_df$educ_scaled <- nimble_data$educ
@@ -343,16 +343,16 @@ dev.off()
 
 
 ##### Comparison of incidence/reporting to predictors 
-pRepPred <- ggplot(combined_df, aes(x = ANC_ref_scaled, y = pi_median)) +
+pRepPred <- ggplot(combined_df, aes(x = FP_scaled, y = pi_median)) +
               geom_point() +
               geom_smooth(method = "lm", se = FALSE, color = "blue") +
-              labs(x = "ANC Reporting Covariate (Scaled)",
+              labs(x = "Reporting Covariate (Scaled)",
                    y = "Posterior Median of π[i]",
                    title = "Correlation between Reporting Predictors and Covariates") +
               geom_text_repel(data = filter(combined_df, pi_median < 0.6), aes(label = LGA)) +
               theme_minimal()
 
-png(filename = paste0(model_out_dir,"/plots/ANC Ref vs Reporting.png"),height=900,width=1200)
+png(filename = paste0(model_out_dir,"/plots/Obs vs predicted Reporting.png"),height=900,width=1200)
 pRepPred
 dev.off()
 
@@ -476,5 +476,6 @@ dev.off()
 #Negative residuals (blue): model pulled mortality down
 # neutral/no residual (white): model fit as expected
 # Positive residuals (red): model pushed mortality up
+
 
 

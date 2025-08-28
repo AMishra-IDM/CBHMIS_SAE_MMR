@@ -10,23 +10,24 @@ library(nimble)
 
 rm(list=ls())
 
-start_time <- Sys.time()
 
+model_run_no <- 99 #### CHANGE MODEL RUN HERE
+
+
+start_time <- Sys.time()
 set.seed(105)
+
+#### SET WORKING DIRECTORY TO GITHUB FILE LOCATIONS
 setwd("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR")
 
-model_run_date <- Sys.Date()
-#optional rename model if running more than one for comparison
-model_run_date <- paste0(model_run_date,"_no_ANCRef")
 
-model_output <- paste0("model_out_",model_run_date,".rds")  ## which version of the model you want to read in
-model_out_dir <- paste0("model runs/model_",model_run_date,"/")
-dir.create(model_out_dir)
+model_output <- paste0("model_out_",model_run_no,".rds")  ## which version of the model you want to read in
+model_out_dir <- paste0("model runs/model_",model_run_no,"/")
 
 prior_check <- FALSE
 
 #### Load NIMBLE data
-load("nimble_inputs_final.RData")
+load(paste0(model_out_dir,"nimble_inputs_final.RData"))
 modData <- read.csv("cbhmis_data_for_model.csv")
 
 
@@ -34,8 +35,8 @@ modData <- read.csv("cbhmis_data_for_model.csv")
 mmr_code <- nimbleCode({
   for (i in 1:n) {
     # Under-reporting model (logit scale)                   # pi is probability of death getting reported -- one for each region
-    pi[i] <- ilogit(b[1] + ancRef[i] * b[2] + gamma[i])     # b[1] baseline log reporting rate
-                                                            # b[2] is effect of ANC references on reporting
+    pi[i] <- ilogit(b[1] + fp_ref[i] * b[2] +gamma[i])      # b[1] baseline log reporting rate
+                                                            # b[2] is effect of reporting rate
                                                             # gamma is LGA-specific unexplained noise for reporting
     
     # Incidence model (log scale)
@@ -70,10 +71,10 @@ mmr_code <- nimbleCode({
   b[2] ~ dnorm(0, sd = 1)      #vague priors, but still less than Stoner et al
   
   # Priors: variance parameters   --- these are truncated normal distributions truncated at 0
-  sigma ~ T(dnorm(0, 0.3), 0, )                              #sigma SD for theta (unstructred RE for incidence)
-  epsilon ~ T(dnorm(0, 1), 0, )                            #epsilon SD for gamma (unstructred RE for reporting)
+  sigma ~ T(dnorm(0, sd = 0.3), 0, )                              #sigma SD for theta (unstructred RE for incidence)
+  epsilon ~ T(dnorm(0,sd = 1), 0, )                            #epsilon SD for gamma (unstructred RE for reporting)
   #nu ~ T(dnorm(0, 1), 0, )
-  nu ~ T(dnorm(0, 2), 0, )                                #Update 7/2, trying a slightly more prior
+  nu ~ T(dnorm(0, sd = 2), 0, )                                #Update 7/2, trying a slightly more prior
   tau <- 1 / (nu^2)                                        #tau is precision (1/var) for spatial RE
 })
 

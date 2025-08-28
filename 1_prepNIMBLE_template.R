@@ -10,10 +10,17 @@ library(sf)
 library(spdep)
 library(ggrepel)
 
+
 rm(list=ls())
+
+### CHANGE THIS FOR EVERY MODEL RUN 
+mod.no <- 99 #### CHANGE MODEL RUN HERE
+
 set.seed(105)
-setwd("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR")
-outdir <- "C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR/output/"
+
+#### SET WORKING DIRECTORY TO GITHUB FILE LOCATIONS
+setwd("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR") 
+outdir <- paste0("C:/Users/anumi/OneDrive - Bill & Melinda Gates Foundation/Documents/GitHub/CBHMIS_SAE_MMR/model runs/model_",mod.no)
 
 
 #### 1: Read in data ####
@@ -46,12 +53,21 @@ ggplot(modData, aes(x = ANC.1st, y = incidence_covars[,3], label = LGA)) +
 
 
 # Reporting model covariate: center
-reporting_covars <- scale(modData[, "ANC_ref_scaled"],
+summary(modData$FP_ref_scaled)
+hist(modData$FP_ref_scaled)
+reporting_covars <- scale(modData[, "FP_ref_scaled"],
                           center = TRUE, scale = TRUE)
-ggplot(modData, aes(x = ANC_ref_scaled, y = reporting_covars[,1], label = LGA)) +
+summary(reporting_covars)
+hist(reporting_covars)
+
+ggplot(modData, aes(x = FP_ref_scaled, y = reporting_covars[,1], label = LGA)) +
   geom_point() +
   geom_text_repel(size = 3) +
   theme_minimal()
+
+## just checking direction of data 
+glm(cbind(modData$deaths, modData$lb - modData$deaths) ~ modData$FP_ref_scaled, family = binomial)
+
 
 #### 3: Create spatial inputs  ####
 nga_shp <- st_read("raw data/gadm41_NGA_shp/gadm41_NGA_2.shp")
@@ -85,7 +101,7 @@ nimble_data <- list(
   educ = incidence_covars[, 1],
   travel = incidence_covars[, 2],
   anc = incidence_covars[, 3],
-  ancRef = reporting_covars[, 1],
+  fp_ref = reporting_covars[, 1],
   live_births = live_births
 )
 
@@ -103,4 +119,5 @@ nimble_inits <- list(
 
 
 #### 3: Save NIMBLE data  ####
-save(nimble_constants, nimble_data, nimble_inits, file = "nimble_inputs_final.RData")
+save(nimble_constants, nimble_data, nimble_inits, file = paste0(outdir,"/nimble_inputs_final.RData"))
+
